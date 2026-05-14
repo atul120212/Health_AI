@@ -3,457 +3,940 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aarogya Sakhi — IVR Health Assistant</title>
+  <title>Aarogya Sakhi — Health AI Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
+    /* ── Reset & base ─────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --c-bg:        #0f172a;
+      --c-surface:   #1e293b;
+      --c-border:    #334155;
+      --c-text:      #f1f5f9;
+      --c-muted:     #94a3b8;
+
+      --citizen:     #38bdf8;
+      --citizen-dk:  #0284c7;
+      --worker:      #34d399;
+      --worker-dk:   #059669;
+      --surv:        #a78bfa;
+      --surv-dk:     #7c3aed;
+
+      --danger:  #f87171;
+      --warning: #fbbf24;
+      --ok:      #4ade80;
+
+      --radius:  14px;
+      --radius-sm: 8px;
+      --shadow:  0 24px 64px rgba(0,0,0,.6);
+    }
 
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: linear-gradient(135deg, #0d47a1 0%, #1565c0 40%, #1976d2 100%);
+      font-family: 'Inter', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0c1a2e 100%);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 16px;
+      padding: 20px;
     }
 
-    /* ── Phone shell ── */
-    .phone {
-      background: #fafafa;
-      border-radius: 40px;
+    /* ── App card ────────────────────────────────────────────── */
+    .app {
       width: 100%;
-      max-width: 400px;
-      min-height: 750px;
-      box-shadow: 0 30px 80px rgba(0,0,0,.5);
+      max-width: 460px;
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      min-height: 720px;
     }
 
-    /* ── Header ── */
+    /* ── Header ──────────────────────────────────────────────── */
     .header {
-      background: linear-gradient(135deg, #1a237e, #283593);
-      color: #fff;
-      padding: 20px 20px 16px;
+      padding: 18px 20px 14px;
+      background: linear-gradient(135deg, rgba(56,189,248,.12), rgba(167,139,250,.08));
+      border-bottom: 1px solid var(--c-border);
       display: flex;
       align-items: center;
       gap: 12px;
     }
-    .header .logo { font-size: 28px; }
-    .header-text h1 { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
-    .header-text p  { font-size: 11px; opacity: .75; margin-top: 2px; }
-    .status-dot {
-      width: 9px; height: 9px; border-radius: 50%;
-      background: #69f0ae; margin-left: auto;
-      box-shadow: 0 0 8px #69f0ae;
+    .header-icon {
+      width: 42px; height: 42px;
+      background: linear-gradient(135deg, var(--citizen), var(--surv));
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
       flex-shrink: 0;
     }
-    .status-dot.inactive { background: #78909c; box-shadow: none; }
-    .status-dot.recording { background: #ff5252; box-shadow: 0 0 8px #ff5252; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
+    .header-info { flex: 1; min-width: 0; }
+    .header-info h1 { font-size: 16px; font-weight: 700; color: var(--c-text); }
+    .header-info p  { font-size: 11px; color: var(--c-muted); margin-top: 2px; }
+    .live-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: .5px;
+      padding: 3px 8px; border-radius: 20px;
+      background: rgba(74,222,128,.15); color: var(--ok);
+      border: 1px solid rgba(74,222,128,.3);
+      flex-shrink: 0;
+    }
+    .live-badge::before { content: '● '; }
 
-    /* ── Config bar ── */
+    /* ── Module tabs ─────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      padding: 10px 12px;
+      gap: 6px;
+      background: rgba(15,23,42,.4);
+      border-bottom: 1px solid var(--c-border);
+    }
+    .tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 8px 4px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tab:hover { background: rgba(255,255,255,.06); }
+    .tab .tab-icon { font-size: 18px; }
+    .tab .tab-label { font-size: 10px; font-weight: 600; color: var(--c-muted); letter-spacing: .3px; }
+    .tab.active-citizen { background: rgba(56,189,248,.15); }
+    .tab.active-citizen .tab-label { color: var(--citizen); }
+    .tab.active-worker  { background: rgba(52,211,153,.15); }
+    .tab.active-worker  .tab-label { color: var(--worker); }
+    .tab.active-surv    { background: rgba(167,139,250,.15); }
+    .tab.active-surv    .tab-label { color: var(--surv); }
+
+    /* ── Config bar ──────────────────────────────────────────── */
     .config-bar {
-      background: #e8eaf6;
-      padding: 10px 16px;
+      padding: 10px 14px;
+      background: rgba(15,23,42,.3);
+      border-bottom: 1px solid var(--c-border);
       display: flex;
       gap: 8px;
       align-items: center;
       flex-wrap: wrap;
     }
-    .config-bar label { font-size: 11px; font-weight: 600; color: #3949ab; }
-    .config-bar select, .config-bar button.start-btn {
-      font-size: 12px; border-radius: 8px; border: 1px solid #9fa8da;
-      padding: 5px 10px; background: #fff; color: #1a237e; cursor: pointer;
-      outline: none;
+    .config-bar label { font-size: 10px; font-weight: 600; color: var(--c-muted); white-space: nowrap; }
+    .config-bar select {
+      font-size: 12px; font-family: inherit;
+      background: rgba(255,255,255,.06); color: var(--c-text);
+      border: 1px solid var(--c-border); border-radius: var(--radius-sm);
+      padding: 5px 8px; cursor: pointer; outline: none; flex: 1; min-width: 80px;
     }
-    .config-bar button.start-btn {
-      background: #3f51b5; color: #fff; border-color: #3f51b5;
-      font-weight: 600; margin-left: auto;
+    .config-bar select option { background: #1e293b; }
+    .btn-start {
+      font-size: 12px; font-weight: 700; padding: 6px 14px;
+      border-radius: 20px; border: none; cursor: pointer; white-space: nowrap;
+      transition: opacity .15s, transform .1s;
     }
-    .config-bar button.start-btn:hover { background: #303f9f; }
-    .config-bar button.start-btn:disabled { opacity: .5; cursor: default; }
+    .btn-start:active { transform: scale(.96); }
+    .btn-start:disabled { opacity: .4; cursor: default; transform: none; }
+    .btn-citizen { background: var(--citizen); color: #0c1a2e; }
+    .btn-worker  { background: var(--worker);  color: #0c1a2e; }
+    .btn-surv    { background: var(--surv);    color: #fff; }
 
-    /* ── Conversation ── */
+    /* ── Panel: voice conversation ───────────────────────────── */
+    .panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+    .panel.visible { display: flex; }
+
     .conversation {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      flex: 1; overflow-y: auto; padding: 14px;
+      display: flex; flex-direction: column; gap: 10px;
     }
+    .conversation::-webkit-scrollbar { width: 4px; }
+    .conversation::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 4px; }
+
+    .placeholder {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 10px; padding: 30px; text-align: center;
+      color: var(--c-muted);
+    }
+    .placeholder .p-icon { font-size: 44px; opacity: .5; }
+    .placeholder p { font-size: 13px; line-height: 1.5; }
+
     .bubble {
-      max-width: 82%;
+      max-width: 84%;
       padding: 10px 14px;
-      border-radius: 18px;
+      border-radius: 16px;
       font-size: 13px;
-      line-height: 1.5;
+      line-height: 1.55;
       word-break: break-word;
+      animation: popIn .15s ease-out;
+    }
+    @keyframes popIn { from { opacity: 0; transform: scale(.95) translateY(6px); } }
+    .bubble .blabel {
+      font-size: 10px; font-weight: 700; letter-spacing: .5px;
+      text-transform: uppercase; margin-bottom: 4px; opacity: .7;
     }
     .bubble.user {
       align-self: flex-end;
-      background: #1565c0;
+      background: linear-gradient(135deg, var(--citizen-dk), var(--citizen));
       color: #fff;
       border-bottom-right-radius: 4px;
     }
     .bubble.ai {
       align-self: flex-start;
-      background: #e8f5e9;
-      color: #1b5e20;
+      background: rgba(255,255,255,.07);
+      color: var(--c-text);
+      border: 1px solid var(--c-border);
       border-bottom-left-radius: 4px;
-      border: 1px solid #c8e6c9;
     }
-    .bubble.system {
+    .bubble.ai.worker-bubble {
+      background: rgba(52,211,153,.08);
+      border-color: rgba(52,211,153,.25);
+    }
+    .bubble.sys {
       align-self: center;
-      background: #fff3e0;
-      color: #e65100;
-      border-radius: 10px;
+      background: rgba(251,191,36,.1);
+      color: var(--warning);
+      border: 1px solid rgba(251,191,36,.25);
+      border-radius: var(--radius-sm);
       font-size: 11px;
-      padding: 6px 12px;
-      border: 1px solid #ffe0b2;
-    }
-    .bubble .label {
-      font-size: 10px; font-weight: 700; opacity: .6;
-      margin-bottom: 3px; text-transform: uppercase; letter-spacing: .5px;
+      padding: 5px 12px;
     }
 
-    /* ── Status bar ── */
+    /* ── Status bar ──────────────────────────────────────────── */
     .status-bar {
-      background: #f5f5f5;
-      border-top: 1px solid #e0e0e0;
-      padding: 8px 16px;
-      font-size: 11px;
-      color: #607d8b;
-      min-height: 32px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      border-top: 1px solid var(--c-border);
+      padding: 7px 14px;
+      font-size: 11px; color: var(--c-muted);
+      display: flex; align-items: center; gap: 6px; min-height: 30px;
     }
-    .status-bar .spinner {
-      width: 12px; height: 12px; border: 2px solid #b0bec5;
-      border-top-color: #1565c0; border-radius: 50%;
-      animation: spin .7s linear infinite; flex-shrink: 0;
+    .spinner {
+      width: 11px; height: 11px;
+      border: 2px solid var(--c-border); border-top-color: var(--citizen);
+      border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Controls ── */
+    /* ── Voice controls ──────────────────────────────────────── */
     .controls {
-      background: #fff;
-      padding: 20px 16px 28px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-      border-top: 1px solid #e0e0e0;
+      padding: 16px 16px 22px;
+      border-top: 1px solid var(--c-border);
+      display: flex; flex-direction: column;
+      align-items: center; gap: 12px;
+      background: rgba(15,23,42,.4);
     }
+
+    .mic-ring {
+      position: relative; width: 76px; height: 76px;
+    }
+    .mic-ring::before {
+      content: '';
+      position: absolute; inset: -5px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      transition: border-color .2s;
+    }
+    .mic-ring.recording::before { border-color: var(--danger); animation: ringPulse 1s infinite; }
+    @keyframes ringPulse { 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:.4; transform:scale(1.08); } }
 
     .mic-btn {
-      width: 72px; height: 72px; border-radius: 50%;
-      border: none; cursor: pointer;
+      width: 76px; height: 76px; border-radius: 50%; border: none;
       display: flex; align-items: center; justify-content: center;
-      font-size: 30px;
-      background: linear-gradient(135deg, #1565c0, #1976d2);
-      color: #fff;
-      box-shadow: 0 4px 16px rgba(21,101,192,.4);
-      transition: transform .12s, box-shadow .12s;
-      user-select: none;
-      -webkit-user-select: none;
+      font-size: 28px; cursor: pointer; user-select: none; -webkit-user-select: none;
+      transition: transform .12s, box-shadow .12s, background .15s;
+      background: linear-gradient(135deg, var(--citizen-dk), var(--citizen));
+      box-shadow: 0 4px 20px rgba(56,189,248,.35);
+      color: #fff; position: relative; z-index: 1;
     }
-    .mic-btn:active, .mic-btn.recording {
-      background: linear-gradient(135deg, #b71c1c, #c62828);
-      box-shadow: 0 4px 20px rgba(183,28,28,.5);
-      transform: scale(1.07);
+    .mic-btn.worker-mic {
+      background: linear-gradient(135deg, var(--worker-dk), var(--worker));
+      box-shadow: 0 4px 20px rgba(52,211,153,.35);
+    }
+    .mic-btn.recording {
+      background: linear-gradient(135deg, #b91c1c, var(--danger));
+      box-shadow: 0 4px 20px rgba(248,113,113,.5);
+      transform: scale(1.06);
     }
     .mic-btn:disabled {
-      background: #cfd8dc; box-shadow: none; cursor: default;
+      background: rgba(255,255,255,.08);
+      box-shadow: none; cursor: default; color: var(--c-muted);
     }
+    .mic-hint { font-size: 11px; color: var(--c-muted); }
 
-    .mic-hint { font-size: 11px; color: #90a4ae; text-align: center; }
-
-    .end-btn {
-      font-size: 12px; padding: 7px 20px; border-radius: 20px;
-      border: 1px solid #ef9a9a; background: #fff; color: #c62828;
+    .btn-end {
+      font-size: 12px; padding: 6px 18px; border-radius: 20px;
+      border: 1px solid rgba(248,113,113,.4);
+      background: transparent; color: var(--danger);
       cursor: pointer; transition: background .1s;
     }
-    .end-btn:hover { background: #ffebee; }
-    .end-btn:disabled { opacity: .4; cursor: default; }
+    .btn-end:hover { background: rgba(248,113,113,.1); }
+    .btn-end:disabled { opacity: .35; cursor: default; }
 
-    /* ── Placeholder ── */
-    .placeholder {
-      flex: 1; display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 10px; opacity: .4; padding: 30px;
-      text-align: center; color: #546e7a;
+    /* ── Panel: Surveillance ─────────────────────────────────── */
+    .surv-panel { padding: 14px; gap: 10px; overflow-y: auto; }
+    .surv-panel::-webkit-scrollbar { width: 4px; }
+    .surv-panel::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 4px; }
+
+    .surv-form {
+      background: rgba(167,139,250,.08);
+      border: 1px solid rgba(167,139,250,.2);
+      border-radius: var(--radius);
+      padding: 14px;
+      display: flex; flex-direction: column; gap: 10px;
     }
-    .placeholder .icon { font-size: 48px; }
-    .placeholder p { font-size: 13px; }
+    .surv-form h3 {
+      font-size: 12px; font-weight: 700; color: var(--surv); letter-spacing: .5px;
+      text-transform: uppercase;
+    }
+    .form-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .form-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 100px; }
+    .form-field label { font-size: 10px; font-weight: 600; color: var(--c-muted); }
+    .form-field input, .form-field select {
+      font-size: 12px; font-family: inherit;
+      background: rgba(255,255,255,.06); color: var(--c-text);
+      border: 1px solid var(--c-border); border-radius: var(--radius-sm);
+      padding: 7px 10px; outline: none;
+      transition: border-color .15s;
+    }
+    .form-field input:focus, .form-field select:focus { border-color: var(--surv); }
+    .form-field select option { background: #1e293b; }
+    .surv-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-scan {
+      font-size: 12px; font-weight: 700; padding: 7px 14px;
+      border-radius: 20px; border: none; cursor: pointer;
+      background: var(--surv); color: #fff;
+      transition: opacity .15s, transform .1s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .btn-analyse {
+      font-size: 12px; font-weight: 600; padding: 7px 14px;
+      border-radius: 20px; cursor: pointer;
+      background: rgba(167,139,250,.15); color: var(--surv);
+      border: 1px solid rgba(167,139,250,.35);
+      transition: opacity .15s; display: flex; align-items: center; gap: 5px;
+    }
+    .btn-scan:hover, .btn-analyse:hover { opacity: .85; }
+    .btn-scan:disabled, .btn-analyse:disabled { opacity: .4; cursor: default; }
 
-    /* ── Scrollbar ── */
-    .conversation::-webkit-scrollbar { width: 4px; }
-    .conversation::-webkit-scrollbar-thumb { background: #b0bec5; border-radius: 4px; }
+    /* Surveillance results */
+    .surv-results { display: flex; flex-direction: column; gap: 8px; }
+    .surv-results-title {
+      font-size: 11px; font-weight: 700; color: var(--c-muted);
+      text-transform: uppercase; letter-spacing: .5px;
+      padding: 4px 0;
+    }
+
+    .alert-card {
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      border: 1px solid;
+      animation: popIn .2s ease-out;
+    }
+    .alert-card.outbreak  { background: rgba(248,113,113,.08);  border-color: rgba(248,113,113,.35);  }
+    .alert-card.pre_alert { background: rgba(251,191,36,.08);   border-color: rgba(251,191,36,.35);   }
+    .alert-card.normal    { background: rgba(74,222,128,.06);   border-color: rgba(74,222,128,.25);   }
+    .alert-card.no_data   { background: rgba(148,163,184,.06);  border-color: rgba(148,163,184,.2);   }
+
+    .alert-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .alert-badge {
+      font-size: 10px; font-weight: 800; padding: 2px 8px;
+      border-radius: 20px; letter-spacing: .5px; text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .outbreak  .alert-badge { background: rgba(248,113,113,.2);  color: var(--danger);  }
+    .pre_alert .alert-badge { background: rgba(251,191,36,.2);   color: var(--warning); }
+    .normal    .alert-badge { background: rgba(74,222,128,.2);   color: var(--ok);      }
+    .no_data   .alert-badge { background: rgba(148,163,184,.15); color: var(--c-muted); }
+
+    .alert-disease {
+      font-size: 14px; font-weight: 700; color: var(--c-text); text-transform: capitalize;
+    }
+    .alert-meta {
+      display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .meta-chip {
+      font-size: 10px; background: rgba(255,255,255,.06);
+      border: 1px solid var(--c-border); border-radius: 6px;
+      padding: 3px 8px; color: var(--c-muted);
+    }
+    .meta-chip strong { color: var(--c-text); }
+    .alert-narrative {
+      font-size: 12px; color: var(--c-muted); line-height: 1.5;
+      border-top: 1px solid var(--c-border); padding-top: 8px; margin-top: 4px;
+    }
+    .alert-actions {
+      margin-top: 8px; padding-left: 14px;
+    }
+    .alert-actions li {
+      font-size: 11px; color: var(--c-muted); margin-bottom: 3px; line-height: 1.4;
+    }
+    .actions-title {
+      font-size: 10px; font-weight: 700; color: var(--c-muted);
+      text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px;
+    }
+
+    .no-alerts {
+      text-align: center; padding: 20px; color: var(--c-muted); font-size: 13px;
+    }
+    .no-alerts .na-icon { font-size: 32px; margin-bottom: 8px; }
+
+    /* Scanning loader */
+    .scan-loading {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px; background: rgba(167,139,250,.08);
+      border: 1px solid rgba(167,139,250,.2); border-radius: var(--radius);
+      font-size: 12px; color: var(--surv);
+    }
+    .scan-loading .spinner { border-top-color: var(--surv); }
   </style>
 </head>
 <body>
-<div class="phone">
+<div class="app">
 
-  <!-- Header -->
+  <!-- ── Header ─────────────────────────────────────────────── -->
   <div class="header">
-    <div class="logo">🏥</div>
-    <div class="header-text">
-      <h1>Aarogya Sakhi</h1>
-      <p>Sarvam Saarika STT · Bulbul TTS · NHIM RAG</p>
+    <div class="header-icon">🏥</div>
+    <div class="header-info">
+      <h1>Aarogya Sakhi Health AI</h1>
+      <p>Sarvam Saarika STT · Bulbul TTS · NHIM RAG · Surveillance</p>
     </div>
-    <div class="status-dot inactive" id="statusDot"></div>
+    <div class="live-badge" id="liveBadge">LIVE</div>
   </div>
 
-  <!-- Config -->
-  <div class="config-bar">
+  <!-- ── Module tabs ────────────────────────────────────────── -->
+  <div class="tabs">
+    <button class="tab active-citizen" id="tab-citizen" onclick="switchModule('citizen')">
+      <span class="tab-icon">👤</span>
+      <span class="tab-label">Citizen AI</span>
+    </button>
+    <button class="tab" id="tab-worker" onclick="switchModule('worker')">
+      <span class="tab-icon">🩺</span>
+      <span class="tab-label">Health Worker</span>
+    </button>
+    <button class="tab" id="tab-surv" onclick="switchModule('surv')">
+      <span class="tab-icon">📊</span>
+      <span class="tab-label">Surveillance</span>
+    </button>
+  </div>
+
+  <!-- ── Config bar (voice modules) ────────────────────────── -->
+  <div class="config-bar" id="voiceConfig">
     <label>Language</label>
     <select id="langSelect">
       <option value="ta-IN">தமிழ் (Tamil)</option>
       <option value="kn-IN">ಕನ್ನಡ (Kannada)</option>
-      <option value="en-IN" selected>English</option>
+      <option value="en-IN" selected>English (EN)</option>
     </select>
-
-    <label>Module</label>
-    <select id="moduleSelect">
-      <option value="citizen" selected>Citizen</option>
-      <option value="worker">Health Worker</option>
+    <label id="roleLabel" style="display:none">Role</label>
+    <select id="workerRole" style="display:none">
+      <option value="asha">ASHA Worker</option>
+      <option value="nurse">PHC Nurse</option>
     </select>
-
-    <button class="start-btn" id="startBtn" onclick="startSession()">Start IVR</button>
+    <button class="btn-start btn-citizen" id="startBtn" onclick="startSession()">▶ Start</button>
   </div>
 
-  <!-- Conversation -->
-  <div class="conversation" id="conversation">
-    <div class="placeholder" id="placeholder">
-      <div class="icon">🎙️</div>
-      <p>Select language &amp; module, then tap <strong>Start IVR</strong> to begin your voice session.</p>
+  <!-- ── Panel: Citizen AI (voice) ─────────────────────────── -->
+  <div class="panel visible" id="panel-citizen">
+    <div class="conversation" id="conv-citizen">
+      <div class="placeholder" id="ph-citizen">
+        <div class="p-icon">🎙️</div>
+        <p>Select language and tap <strong>Start</strong> to begin a voice session with <strong>Aarogya Sakhi</strong>.</p>
+      </div>
+    </div>
+    <div class="status-bar" id="sb-citizen">
+      <span>Ready — tap Start</span>
+    </div>
+    <div class="controls" id="ctrl-citizen">
+      <div class="mic-ring" id="ring-citizen">
+        <button class="mic-btn" id="mic-citizen" disabled
+          onmousedown="startRec(event)" onmouseup="stopRec(event)"
+          ontouchstart="startRec(event)" ontouchend="stopRec(event)">🎤</button>
+      </div>
+      <div class="mic-hint" id="hint-citizen">Hold button and speak</div>
+      <button class="btn-end" id="end-citizen" disabled onclick="endSession()">End Session</button>
     </div>
   </div>
 
-  <!-- Status -->
-  <div class="status-bar" id="statusBar">
-    <span id="statusText">Ready — tap Start IVR</span>
+  <!-- ── Panel: Health Worker (voice) ──────────────────────── -->
+  <div class="panel" id="panel-worker">
+    <div class="conversation" id="conv-worker">
+      <div class="placeholder" id="ph-worker">
+        <div class="p-icon">🩺</div>
+        <p>Select language, role, and tap <strong>Start</strong> to query <strong>Swastha Sahayak</strong> — protocol lookup, patient records, referrals.</p>
+      </div>
+    </div>
+    <div class="status-bar" id="sb-worker">
+      <span>Ready — tap Start</span>
+    </div>
+    <div class="controls" id="ctrl-worker">
+      <div class="mic-ring" id="ring-worker">
+        <button class="mic-btn worker-mic" id="mic-worker" disabled
+          onmousedown="startRec(event)" onmouseup="stopRec(event)"
+          ontouchstart="startRec(event)" ontouchend="stopRec(event)">🎤</button>
+      </div>
+      <div class="mic-hint" id="hint-worker">Hold button and speak</div>
+      <button class="btn-end" id="end-worker" disabled onclick="endSession()">End Session</button>
+    </div>
   </div>
 
-  <!-- Controls -->
-  <div class="controls">
-    <button class="mic-btn" id="micBtn" disabled title="Hold to speak" onmousedown="startRecording()" onmouseup="stopRecording()" ontouchstart="startRecording(event)" ontouchend="stopRecording(event)">🎤</button>
-    <div class="mic-hint" id="micHint">Hold the button and speak</div>
-    <button class="end-btn" id="endBtn" disabled onclick="endSession()">End Session</button>
+  <!-- ── Panel: Disease Surveillance ───────────────────────── -->
+  <div class="panel" id="panel-surv">
+    <div class="conversation surv-panel" id="surv-content">
+
+      <!-- Surveillance form -->
+      <div class="surv-form">
+        <h3>📊 District Surveillance</h3>
+        <div class="form-row">
+          <div class="form-field">
+            <label>District</label>
+            <input type="text" id="survDistrict" placeholder="e.g. Chennai" value="Chennai" />
+          </div>
+          <div class="form-field">
+            <label>Disease (for single analysis)</label>
+            <select id="survDisease">
+              <option value="dengue">Dengue</option>
+              <option value="malaria">Malaria</option>
+              <option value="typhoid">Typhoid</option>
+              <option value="chikungunya">Chikungunya</option>
+              <option value="diarrhoea">Diarrhoea</option>
+              <option value="acute_respiratory_illness">Acute Respiratory Illness</option>
+              <option value="leptospirosis">Leptospirosis</option>
+              <option value="scrub_typhus">Scrub Typhus</option>
+            </select>
+          </div>
+        </div>
+        <div class="surv-btns">
+          <button class="btn-scan" id="btnScanAll" onclick="runScan()">
+            🔍 Scan All Diseases
+          </button>
+          <button class="btn-analyse" id="btnAnalyse" onclick="runAnalyse()">
+            📈 Single Analysis
+          </button>
+        </div>
+      </div>
+
+      <!-- Results area -->
+      <div class="surv-results" id="survResults"></div>
+
+    </div>
+    <div class="status-bar" id="sb-surv">
+      <span>Enter a district and scan for disease alerts</span>
+    </div>
   </div>
 
-</div>
+</div><!-- /app -->
 
 <script>
-  // ── State ────────────────────────────────────────────────────────────────
-  let sessionId      = null;
-  let mediaRecorder  = null;
-  let audioChunks    = [];
-  let isRecording    = false;
-  let isBusy         = false;   // LLM request in-flight
+// ── State ──────────────────────────────────────────────────────────────────
+let currentModule = 'citizen';  // citizen | worker | surv
+let sessionId     = null;
+let mediaRecorder = null;
+let audioChunks   = [];
+let isRecording   = false;
+let isBusy        = false;
 
-  // ── DOM refs ──────────────────────────────────────────────────────────────
-  const conv      = document.getElementById('conversation');
-  const placeholder = document.getElementById('placeholder');
-  const statusDot = document.getElementById('statusDot');
-  const statusTxt = document.getElementById('statusText');
-  const micBtn    = document.getElementById('micBtn');
-  const endBtn    = document.getElementById('endBtn');
-  const startBtn  = document.getElementById('startBtn');
-  const langSel   = document.getElementById('langSelect');
-  const modSel    = document.getElementById('moduleSelect');
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  function setStatus(text, type='idle') {
-    // type: idle | recording | busy
-    const bar = document.getElementById('statusBar');
-    bar.innerHTML = '';
-    if (type === 'busy') {
-      const spin = document.createElement('div');
-      spin.className = 'spinner';
-      bar.appendChild(spin);
-    }
-    const span = document.createElement('span');
-    span.id = 'statusText';
-    span.textContent = text;
-    bar.appendChild(span);
-
-    statusDot.className = 'status-dot' +
-      (type === 'recording' ? ' recording' : type === 'idle' && sessionId ? '' : ' inactive');
+// ── Module switching ───────────────────────────────────────────────────────
+function switchModule(mod) {
+  if (sessionId && mod !== currentModule) {
+    if (!confirm('End current session and switch module?')) return;
+    endSession(true);
   }
+  currentModule = mod;
 
-  function addBubble(role, labelText, bodyText) {
-    placeholder.style.display = 'none';
-    const wrap = document.createElement('div');
-    wrap.className = 'bubble ' + role;
-    if (labelText) {
-      const lbl = document.createElement('div');
-      lbl.className = 'label';
-      lbl.textContent = labelText;
-      wrap.appendChild(lbl);
-    }
-    const body = document.createElement('div');
-    body.textContent = bodyText;
-    wrap.appendChild(body);
-    conv.appendChild(wrap);
-    conv.scrollTop = conv.scrollHeight;
-    return wrap;
-  }
+  // Update tabs
+  ['citizen','worker','surv'].forEach(m => {
+    const t = document.getElementById('tab-' + m);
+    t.className = 'tab' + (m === mod ? ' active-' + m : '');
+  });
 
-  function playBase64Wav(b64) {
-    if (!b64) return;
-    const audio = new Audio('data:audio/wav;base64,' + b64);
-    audio.play().catch(() => {});
-    return new Promise(res => { audio.onended = res; audio.onerror = res; });
-  }
+  // Show/hide panels
+  ['citizen','worker','surv'].forEach(m => {
+    document.getElementById('panel-' + m).classList.toggle('visible', m === mod);
+  });
 
-  // ── Session lifecycle ─────────────────────────────────────────────────────
-  async function startSession() {
-    if (sessionId) return;
-    startBtn.disabled = true;
-    setStatus('Starting session…', 'busy');
+  // Config bar visibility & styling
+  const voiceCfg = document.getElementById('voiceConfig');
+  const startBtn = document.getElementById('startBtn');
+  const roleLabel = document.getElementById('roleLabel');
+  const workerRole = document.getElementById('workerRole');
 
-    const form = new FormData();
-    form.append('language_code', langSel.value);
-    form.append('module', modSel.value);
-    form.append('worker_role', 'asha');
-
-    try {
-      const res = await fetch('/ivr/start', { method: 'POST', body: form });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      sessionId = data.session_id;
-
-      addBubble('ai', '🏥 Aarogya Sakhi', data.greeting_text);
-      micBtn.disabled = false;
-      endBtn.disabled = false;
-      langSel.disabled = true;
-      modSel.disabled  = true;
-      setStatus('Session active — ' + langSel.options[langSel.selectedIndex].text, 'idle');
-
-      if (data.audio_b64) {
-        setStatus('Playing greeting…', 'busy');
-        await playBase64Wav(data.audio_b64);
-        setStatus('Hold mic button to speak', 'idle');
-      }
-    } catch(e) {
-      addBubble('system', null, '⚠️ Failed to start session: ' + e.message);
-      startBtn.disabled = false;
-      setStatus('Error — try again', 'idle');
-    }
-  }
-
-  async function endSession() {
-    if (!sessionId) return;
-    try {
-      await fetch('/ivr/end/' + sessionId, { method: 'POST' });
-    } catch(_) {}
-    addBubble('system', null, '📞 Session ended.');
-    sessionId = null;
-    micBtn.disabled  = true;
-    endBtn.disabled  = true;
+  if (mod === 'surv') {
+    voiceCfg.style.display = 'none';
+  } else {
+    voiceCfg.style.display = 'flex';
+    startBtn.className = 'btn-start btn-' + mod;
+    // Show worker role selector only for worker module
+    const isWorker = mod === 'worker';
+    roleLabel.style.display  = isWorker ? '' : 'none';
+    workerRole.style.display = isWorker ? '' : 'none';
     startBtn.disabled = false;
-    langSel.disabled  = false;
-    modSel.disabled   = false;
-    setStatus('Session ended — tap Start IVR for a new session', 'idle');
-    statusDot.className = 'status-dot inactive';
+    langSelect.disabled = false;
   }
+}
 
-  // ── Recording ─────────────────────────────────────────────────────────────
-  async function startRecording(e) {
-    if (e) e.preventDefault();
-    if (!sessionId || isRecording || isBusy) return;
+// ── Session lifecycle ──────────────────────────────────────────────────────
+async function startSession() {
+  if (sessionId) return;
+  const mod  = currentModule;
+  const lang = document.getElementById('langSelect').value;
+  const role = document.getElementById('workerRole').value;
 
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch(err) {
-      addBubble('system', null, '⚠️ Microphone access denied: ' + err.message);
-      return;
+  setStartBtn(true);
+  setStatus(mod, '⏳ Starting session…', true);
+
+  const form = new FormData();
+  form.append('language_code', lang);
+  form.append('module', mod);
+  form.append('worker_role', role);
+
+  try {
+    const res = await fetch('/ivr/start', { method: 'POST', body: form });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    sessionId = data.session_id;
+
+    const name = mod === 'worker' ? '🩺 Swastha Sahayak' : '🏥 Aarogya Sakhi';
+    addBubble(mod, 'ai', name, data.greeting_text);
+    enableMic(mod, true);
+    document.getElementById('end-' + mod).disabled = false;
+    document.getElementById('langSelect').disabled = true;
+    document.getElementById('workerRole').disabled = true;
+    setStatus(mod, `Session active · ${langLabel(lang)}`);
+
+    if (data.audio_b64) {
+      setStatus(mod, '🔊 Playing greeting…', true);
+      await playWav(data.audio_b64);
+      setStatus(mod, 'Hold mic to speak');
     }
+  } catch(e) {
+    addBubble(mod, 'sys', null, '⚠️ ' + e.message);
+    setStartBtn(false);
+    setStatus(mod, 'Failed to start — try again');
+  }
+}
 
-    audioChunks = [];
+async function endSession(silent = false) {
+  if (!sessionId) return;
+  const mod = currentModule;
+  try { await fetch('/ivr/end/' + sessionId, { method: 'POST' }); } catch(_) {}
+  if (!silent) addBubble(mod, 'sys', null, '📞 Session ended.');
+  sessionId = null;
+  enableMic(mod, false);
+  document.getElementById('end-' + mod).disabled = true;
+  setStartBtn(false);
+  document.getElementById('langSelect').disabled = false;
+  document.getElementById('workerRole').disabled = false;
+  setStatus(mod, 'Session ended — tap Start for a new session');
+}
 
-    // Prefer audio/webm; fallback to whatever the browser supports
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-      ? 'audio/webm;codecs=opus'
-      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+// ── Recording ──────────────────────────────────────────────────────────────
+async function startRec(e) {
+  e.preventDefault();
+  if (!sessionId || isRecording || isBusy) return;
+  const mod = currentModule;
 
-    mediaRecorder = mimeType
-      ? new MediaRecorder(stream, { mimeType })
-      : new MediaRecorder(stream);
-
-    mediaRecorder.ondataavailable = e => { if (e.data.size) audioChunks.push(e.data); };
-    mediaRecorder.start(100);
-    isRecording = true;
-
-    micBtn.classList.add('recording');
-    micBtn.textContent = '⏹️';
-    document.getElementById('micHint').textContent = 'Recording — release to send';
-    setStatus('🔴 Recording…', 'recording');
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(err) {
+    addBubble(mod, 'sys', null, '⚠️ Mic access denied: ' + err.message);
+    return;
   }
 
-  async function stopRecording(e) {
-    if (e) e.preventDefault();
-    if (!mediaRecorder || !isRecording) return;
-    isRecording = false;
+  audioChunks = [];
+  const mimeType = ['audio/webm;codecs=opus','audio/webm',''].find(t => !t || MediaRecorder.isTypeSupported(t));
+  mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = e => { if (e.data.size) audioChunks.push(e.data); };
+  mediaRecorder.start(100);
+  isRecording = true;
 
-    mediaRecorder.stop();
-    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-    micBtn.classList.remove('recording');
-    micBtn.textContent  = '🎤';
-    micBtn.disabled = true;
-    document.getElementById('micHint').textContent = 'Processing…';
-    setStatus('Transcribing with Saarika…', 'busy');
+  const btn  = document.getElementById('mic-' + mod);
+  const ring = document.getElementById('ring-' + mod);
+  btn.classList.add('recording');
+  btn.textContent = '⏹️';
+  ring.classList.add('recording');
+  document.getElementById('hint-' + mod).textContent = 'Recording — release to send';
+  setStatus(mod, '🔴 Recording…', false, 'recording');
+}
 
-    mediaRecorder.onstop = async () => {
-      const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-      await sendAudio(blob);
-    };
-  }
+async function stopRec(e) {
+  e.preventDefault();
+  if (!mediaRecorder || !isRecording) return;
+  isRecording = false;
+  const mod = currentModule;
 
-  async function sendAudio(blob) {
-    isBusy = true;
-    const form = new FormData();
-    form.append('session_id', sessionId);
-    form.append('audio', blob, 'voice.webm');
+  mediaRecorder.stop();
+  mediaRecorder.stream.getTracks().forEach(t => t.stop());
 
-    try {
-      const res = await fetch('/ivr/speak', { method: 'POST', body: form });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || res.statusText);
-      }
-      const data = await res.json();
+  const btn  = document.getElementById('mic-' + mod);
+  const ring = document.getElementById('ring-' + mod);
+  btn.classList.remove('recording');
+  btn.textContent = '🎤';
+  ring.classList.remove('recording');
+  enableMic(mod, false);
+  document.getElementById('hint-' + mod).textContent = 'Processing…';
+  setStatus(mod, 'Transcribing…', true);
 
-      // Show user transcript bubble
-      addBubble('user', '🎙 You', data.transcript);
+  mediaRecorder.onstop = async () => {
+    const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+    await sendAudio(mod, blob);
+  };
+}
 
-      // Show AI reply bubble
-      addBubble('ai', '🏥 Aarogya Sakhi', data.reply);
+async function sendAudio(mod, blob) {
+  isBusy = true;
+  const form = new FormData();
+  form.append('session_id', sessionId);
+  form.append('audio', blob, 'voice.webm');
 
-      // Play TTS (Bulbul)
-      if (data.audio_b64) {
-        setStatus('Speaking…', 'busy');
-        await playBase64Wav(data.audio_b64);
-      }
-      setStatus(`Turn ${data.turn_count} · Hold mic button to speak`, 'idle');
-    } catch(e) {
-      addBubble('system', null, '⚠️ ' + e.message);
-      setStatus('Error — try again', 'idle');
-    } finally {
-      isBusy = false;
-      if (sessionId) {
-        micBtn.disabled = false;
-        document.getElementById('micHint').textContent = 'Hold the button and speak';
-      }
+  try {
+    const res = await fetch('/ivr/speak', { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || res.statusText);
+    }
+    const data = await res.json();
+
+    const userLabel = '🎙 You';
+    const aiLabel   = mod === 'worker' ? '🩺 Swastha Sahayak' : '🏥 Aarogya Sakhi';
+    const aiCls     = mod === 'worker' ? 'ai worker-bubble' : 'ai';
+
+    if (data.transcript) addBubble(mod, 'user', userLabel, data.transcript);
+    if (data.reply)      addBubble(mod, aiCls, aiLabel, data.reply);
+
+    if (data.audio_b64) {
+      setStatus(mod, '🔊 Speaking…', true);
+      await playWav(data.audio_b64);
+    }
+    setStatus(mod, `Turn ${data.turn_count} · Hold mic to speak`);
+  } catch(e) {
+    addBubble(mod, 'sys', null, '⚠️ ' + e.message);
+    setStatus(mod, 'Error — try again');
+  } finally {
+    isBusy = false;
+    if (sessionId) {
+      enableMic(mod, true);
+      document.getElementById('hint-' + mod).textContent = 'Hold the button and speak';
     }
   }
+}
 
-  // Prevent context menu on long-press (mobile)
-  document.getElementById('micBtn').addEventListener('contextmenu', e => e.preventDefault());
+// ── Surveillance ───────────────────────────────────────────────────────────
+async function runScan() {
+  const district = document.getElementById('survDistrict').value.trim();
+  if (!district) { alert('Enter a district name.'); return; }
+
+  setSurvBtns(true);
+  setStatus('surv', '⏳ Scanning all priority diseases for ' + district + '…', true);
+  showSurvLoading('Scanning all 8 priority diseases — this may take 20–40 s…');
+
+  try {
+    const res = await fetch('/surveillance/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ district }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    renderSurvResults(district, data.alerts);
+    setStatus('surv', `Scan complete — ${data.total} alert(s) for ${district}`);
+  } catch(e) {
+    clearSurvResults();
+    renderError('Scan failed: ' + e.message);
+    setStatus('surv', 'Error — check district name and try again');
+  } finally {
+    setSurvBtns(false);
+  }
+}
+
+async function runAnalyse() {
+  const district = document.getElementById('survDistrict').value.trim();
+  const disease  = document.getElementById('survDisease').value;
+  if (!district) { alert('Enter a district name.'); return; }
+
+  setSurvBtns(true);
+  setStatus('surv', `⏳ Analysing ${disease} in ${district}…`, true);
+  showSurvLoading(`Analysing ${disease} trend for ${district}…`);
+
+  try {
+    const res = await fetch('/surveillance/analyse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ district, disease }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    renderSurvResults(district, data.status !== 'no_data' ? [data] : [], data.status === 'no_data' ? data : null);
+    const st = data.status || 'unknown';
+    setStatus('surv', `${disease} in ${district}: ${st.toUpperCase()} (z=${data.z_score ?? '—'})`);
+  } catch(e) {
+    clearSurvResults();
+    renderError('Analysis failed: ' + e.message);
+    setStatus('surv', 'Error — try again');
+  } finally {
+    setSurvBtns(false);
+  }
+}
+
+function showSurvLoading(msg) {
+  const el = document.getElementById('survResults');
+  el.innerHTML = `
+    <div class="scan-loading">
+      <div class="spinner"></div>
+      <span>${msg}</span>
+    </div>`;
+}
+
+function clearSurvResults() {
+  document.getElementById('survResults').innerHTML = '';
+}
+
+function renderError(msg) {
+  document.getElementById('survResults').innerHTML = `
+    <div class="alert-card no_data">
+      <div class="alert-header">
+        <span class="alert-badge">Error</span>
+      </div>
+      <div style="font-size:12px;color:var(--danger)">${esc(msg)}</div>
+    </div>`;
+}
+
+function renderSurvResults(district, alerts, noDataResult) {
+  const el = document.getElementById('survResults');
+  el.innerHTML = '';
+
+  const title = document.createElement('div');
+  title.className = 'surv-results-title';
+  title.textContent = `Results for ${district}`;
+  el.appendChild(title);
+
+  if (noDataResult) {
+    el.innerHTML += `<div class="alert-card no_data">
+      <div class="alert-header">
+        <span class="alert-badge">No Data</span>
+        <span class="alert-disease">${esc(noDataResult.disease || '')}</span>
+      </div>
+      <div style="font-size:12px;color:var(--c-muted)">No surveillance data available for this district/disease.</div>
+    </div>`;
+    return;
+  }
+
+  if (!alerts || alerts.length === 0) {
+    el.innerHTML += `<div class="no-alerts">
+      <div class="na-icon">✅</div>
+      <div style="font-weight:700;color:var(--ok);margin-bottom:4px">All Clear</div>
+      <div>No outbreak alerts detected for ${esc(district)}.</div>
+    </div>`;
+    return;
+  }
+
+  alerts.forEach(a => {
+    const status = a.status || 'normal';
+    const statusLabel = status === 'outbreak' ? '🔴 OUTBREAK' : status === 'pre_alert' ? '🟡 PRE-ALERT' : '🟢 NORMAL';
+    const disease = (a.disease || '').replace(/_/g, ' ');
+    const zscore  = a.z_score != null ? a.z_score.toFixed(2) : '—';
+    const cases   = a.latest_suspected_cases ?? '—';
+    const week    = a.latest_week || '';
+    const narrative = a.alert_narrative || '';
+    const actions   = a.recommended_actions || [];
+
+    const card = document.createElement('div');
+    card.className = 'alert-card ' + status;
+    card.innerHTML = `
+      <div class="alert-header">
+        <span class="alert-badge">${statusLabel}</span>
+        <span class="alert-disease">${esc(disease)}</span>
+      </div>
+      <div class="alert-meta">
+        <span class="meta-chip">Z-score <strong>${esc(zscore)}</strong></span>
+        <span class="meta-chip">Cases <strong>${esc(String(cases))}</strong></span>
+        ${week ? `<span class="meta-chip">Week <strong>${esc(week)}</strong></span>` : ''}
+        <span class="meta-chip">Baseline <strong>${a.baseline_mean != null ? a.baseline_mean.toFixed(1) : '—'} ± ${a.baseline_std != null ? a.baseline_std.toFixed(1) : '—'}</strong></span>
+      </div>
+      ${narrative ? `<div class="alert-narrative">${esc(narrative)}</div>` : ''}
+      ${actions.length ? `
+        <div class="actions-title" style="margin-top:8px">Recommended Actions</div>
+        <ol class="alert-actions">
+          ${actions.map(a => `<li>${esc(a)}</li>`).join('')}
+        </ol>` : ''}
+    `;
+    el.appendChild(card);
+  });
+}
+
+// ── UI helpers ─────────────────────────────────────────────────────────────
+const langSelect = document.getElementById('langSelect');
+
+function langLabel(code) {
+  return { 'ta-IN': 'Tamil', 'kn-IN': 'Kannada', 'en-IN': 'English' }[code] || code;
+}
+
+function setStatus(mod, text, busy = false, type = '') {
+  const sb = document.getElementById('sb-' + mod);
+  sb.innerHTML = busy ? '<div class="spinner"></div>' : (type === 'recording' ? '🔴 ' : '');
+  const s = document.createElement('span');
+  s.textContent = text;
+  sb.appendChild(s);
+}
+
+function addBubble(mod, role, label, body) {
+  const conv = document.getElementById('conv-' + mod);
+  const ph   = document.getElementById('ph-' + mod);
+  if (ph) ph.style.display = 'none';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'bubble ' + role;
+  if (label) {
+    const l = document.createElement('div');
+    l.className = 'blabel';
+    l.textContent = label;
+    wrap.appendChild(l);
+  }
+  const b = document.createElement('div');
+  b.textContent = body;
+  wrap.appendChild(b);
+  conv.appendChild(wrap);
+  conv.scrollTop = conv.scrollHeight;
+}
+
+function playWav(b64) {
+  if (!b64) return Promise.resolve();
+  return new Promise(res => {
+    const audio = new Audio('data:audio/wav;base64,' + b64);
+    audio.onended = res;
+    audio.onerror = res;
+    audio.play().catch(res);
+  });
+}
+
+function enableMic(mod, on) {
+  document.getElementById('mic-' + mod).disabled = !on;
+}
+
+function setStartBtn(disabled) {
+  document.getElementById('startBtn').disabled = disabled;
+}
+
+function setSurvBtns(disabled) {
+  document.getElementById('btnScanAll').disabled  = disabled;
+  document.getElementById('btnAnalyse').disabled = disabled;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Prevent context menu on long-press (mobile)
+['mic-citizen','mic-worker'].forEach(id => {
+  document.getElementById(id).addEventListener('contextmenu', e => e.preventDefault());
+});
 </script>
 </body>
 </html>
