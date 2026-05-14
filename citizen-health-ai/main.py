@@ -12,6 +12,7 @@ Endpoints:
   GET  /health                — health check
 """
 
+import base64
 import logging
 import sys
 from pathlib import Path
@@ -22,11 +23,14 @@ sys.path.insert(0, str(Path(__file__).parent))
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from config.settings import HOST, PORT
 from src.citizen_ai import citizen_assistant
 from src.health_worker_ai import health_worker_assistant
+from src.ivr import session_manager
+from src.shared.sarvam_client import sarvam
 from src.surveillance_ai import outbreak_detector
 
 logging.basicConfig(
@@ -54,6 +58,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static IVR interface at /static/
+_static_dir = Path(__file__).parent / "static"
+_static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +114,11 @@ def _to_messages(messages: list[Message]) -> list[dict]:
 
 @app.get("/", include_in_schema=False)
 async def root():
+    return RedirectResponse(url="/static/ivr.html")
+
+
+@app.get("/docs-ui", include_in_schema=False)
+async def docs_ui():
     return RedirectResponse(url="/docs")
 
 
@@ -274,6 +288,151 @@ async def surveillance_scan(req: SurveillanceScanRequest):
     except Exception as exc:
         logger.exception("surveillance/scan error")
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# IVR — Interactive Voice Response endpoints
+# ---------------------------------------------------------------------------
+# All three assistants share this IVR layer.
+# STT:  Sarvam Saarika (saarika:v2) — all modules
+# TTS:  Sarvam Bulbul  (bulbul:v2)  — Citizen AI module
+# RAG:  NHIM knowledge base injected into Citizen AI system prompt
+
+_IVR_GREETINGS = {
+    "ta-IN": (
+        "வணக்கம்! நான் ஆரோக்ய சகி. மருத்துவமனை, காப்பீடு, தடுப்பூசி, "
+        "தாய்மை சுகாதாரம் பற்றி உங்களுக்கு உதவலாம். கேளுங்கள்."
+    ),
+    "kn-IN": (
+        "ನಮಸ್ಕಾರ! ನಾನು ಆರೋಗ್ಯ ಸಖಿ. ಆಸ್ಪತ್ರೆ, ವಿಮೆ, ಲಸಿಕೆ, "
+        "ತಾಯಿ ಆರೋಗ್ಯ ಸೇವೆಗಳ ಬಗ್ಗೆ ಸಹಾಯ ಮಾಡಲು ಇಲ್ಲಿದ್ದೇನೆ. ಕೇಳಿ."
+    ),
+    "en-IN": (
+        "Hello! I am Aarogya Sakhi, your health assistant. "
+        "I can help with hospitals, insurance, vaccination, and maternal health. "
+        "How can I help you today?"
+    ),
+}
+
+_WORKER_GREETINGS = {
+    "ta-IN": "வணக்கம்! நான் ஸ்வஸ்தா சகாயக். NHM நெறிமுறைகள், நோயாளி பதிவுகள், பரிந்துரை ஆகியவற்றில் உதவலாம்.",
+    "kn-IN": "ನಮಸ್ಕಾರ! ನಾನು ಸ್ವಸ್ಥ ಸಹಾಯಕ. NHM ಮಾರ್ಗದರ್ಶಿ, ರೋಗಿ ದಾಖಲೆ, ರೆಫರಲ್ ಸಹಾಯ ಮಾಡಲು ಇದ್ದೇನೆ.",
+    "en-IN": "Hello! I am Swastha Sahayak. I can assist with NHM protocols, patient records, and referral guidance.",
+}
+
+_TTS_SPEAKERS = {"ta-IN": "anushka", "kn-IN": "anushka", "en-IN": "anushka"}
+
+
+@app.post("/ivr/start", tags=["IVR"])
+async def ivr_start(
+    language_code: str = Form("ta-IN"),
+    module: str = Form("citizen"),        # citizen | worker
+    worker_role: str = Form("asha"),      # asha | nurse
+):
+    """
+    Start a new IVR session.
+
+    Returns session_id, greeting text, and Bulbul TTS audio (base64 WAV).
+    """
+    session = session_manager.create(
+        language_code=language_code,
+        module=module,
+        worker_role=worker_role,
+    )
+
+    greetings = _IVR_GREETINGS if module == "citizen" else _WORKER_GREETINGS
+    greeting_text = greetings.get(language_code, greetings["en-IN"])
+
+    speaker = _TTS_SPEAKERS.get(language_code, "anushka")
+    audio_bytes = await sarvam.text_to_speech(greeting_text, language_code, speaker)
+
+    return {
+        "session_id": session.session_id,
+        "language_code": language_code,
+        "module": module,
+        "greeting_text": greeting_text,
+        "audio_b64": base64.b64encode(audio_bytes).decode() if audio_bytes else "",
+    }
+
+
+@app.post("/ivr/speak", tags=["IVR"])
+async def ivr_speak(
+    session_id: str = Form(...),
+    audio: UploadFile = File(..., description="User voice recording (WAV/WebM)"),
+):
+    """
+    Process one voice turn in an IVR session.
+
+    Pipeline:
+      Saarika STT → RAG-augmented LLM (citizen) or plain LLM (worker) → Bulbul TTS
+
+    Returns transcript, AI reply text, and TTS audio (base64 WAV).
+    """
+    session = session_manager.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found or expired. Call /ivr/start.")
+
+    audio_bytes = await audio.read()
+
+    # 1. Sarvam Saarika STT (saarika:v2)
+    transcript = await sarvam.speech_to_text(audio_bytes, session.language_code)
+    if not transcript or not transcript.strip():
+        raise HTTPException(status_code=422, detail="Could not transcribe audio — try speaking more clearly.")
+
+    # 2. Append user turn to history
+    session.history.append({"role": "user", "content": transcript})
+
+    # 3. LLM call (RAG context auto-injected inside citizen_assistant.chat)
+    if session.module == "worker":
+        reply = await health_worker_assistant.chat(
+            session.history, language=session.lang, worker_role=session.worker_role
+        )
+    else:
+        reply = await citizen_assistant.chat(session.history, language=session.lang)
+
+    session.history.append({"role": "assistant", "content": reply})
+
+    # 4. Sarvam Bulbul TTS (bulbul:v2) — citizen module
+    speaker = _TTS_SPEAKERS.get(session.language_code, "anushka")
+    audio_out = await sarvam.text_to_speech(reply, session.language_code, speaker)
+
+    return {
+        "session_id": session_id,
+        "transcript": transcript,
+        "reply": reply,
+        "audio_b64": base64.b64encode(audio_out).decode() if audio_out else "",
+        "turn_count": session.turn_count,
+        "language_code": session.language_code,
+    }
+
+
+@app.get("/ivr/session/{session_id}", tags=["IVR"])
+async def ivr_session_info(session_id: str):
+    """Get current session state and full conversation history."""
+    session = session_manager.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found or expired.")
+    return {
+        "session_id": session_id,
+        "language_code": session.language_code,
+        "module": session.module,
+        "worker_role": session.worker_role,
+        "turn_count": session.turn_count,
+        "history": session.history,
+    }
+
+
+@app.post("/ivr/end/{session_id}", tags=["IVR"])
+async def ivr_end(session_id: str):
+    """Terminate an IVR session and free its resources."""
+    session_manager.end(session_id)
+    return {"status": "ended", "session_id": session_id}
+
+
+@app.get("/ivr/sessions", tags=["IVR"])
+async def ivr_list_sessions():
+    """List all active IVR sessions (debug/monitoring)."""
+    return {"sessions": session_manager.list_active()}
 
 
 # ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ from openai import AsyncOpenAI
 
 from config.settings import SARVAM_API_KEY, SARVAM_BASE_URL, SARVAM_LLM_MODEL
 from src.middleware import hmis_bridge
+from src.rag import nhim_retriever
 from src.shared.sarvam_client import sarvam
 
 logger = logging.getLogger(__name__)
@@ -283,7 +284,16 @@ class CitizenAssistant:
             "en": "Please respond in English.",
         }.get(language, "")
 
-        system = f"{CITIZEN_SYSTEM_PROMPT}\n\n{lang_hint}".strip()
+        # RAG: retrieve relevant NHIM scheme context from the last user message
+        last_user_content = next(
+            (m["content"] for m in reversed(messages) if m.get("role") == "user"), ""
+        )
+        rag_context = nhim_retriever.format_context(last_user_content, top_k=3)
+
+        system = CITIZEN_SYSTEM_PROMPT
+        if rag_context:
+            system = f"{system}\n\n{rag_context}"
+        system = f"{system}\n\n{lang_hint}".strip()
 
         # Agentic loop — keeps going until no more tool calls
         loop_messages = list(messages)
@@ -294,11 +304,11 @@ class CitizenAssistant:
                 final_text = await self._stream_turn(system, loop_messages)
                 break
 
-            response = await self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(  # type: ignore[call-overload]
                 model=SARVAM_LLM_MODEL,
                 max_tokens=1024,
-                messages=[{"role": "system", "content": system}] + loop_messages,
-                tools=CITIZEN_TOOLS,
+                messages=[{"role": "system", "content": system}] + loop_messages,  # type: ignore[arg-type]
+                tools=CITIZEN_TOOLS,  # type: ignore[arg-type]
             )
             choice = response.choices[0]
             final_text = choice.message.content or ""
@@ -316,11 +326,11 @@ class CitizenAssistant:
         collected_text = ""
         tool_calls_map: dict[int, dict] = {}
 
-        stream = await self.client.chat.completions.create(
+        stream = await self.client.chat.completions.create(  # type: ignore[call-overload]
             model=SARVAM_LLM_MODEL,
             max_tokens=1024,
-            messages=[{"role": "system", "content": system}] + messages,
-            tools=CITIZEN_TOOLS,
+            messages=[{"role": "system", "content": system}] + messages,  # type: ignore[arg-type]
+            tools=CITIZEN_TOOLS,  # type: ignore[arg-type]
             stream=True,
         )
 
@@ -425,8 +435,8 @@ class CitizenAssistant:
         reply_text = await self.chat(conversation_history, language=lang)
 
         # 3. Convert reply to speech
-        speaker_map = {"ta": "meera", "kn": "amol", "en": "meera"}
-        speaker = speaker_map.get(lang, "meera")
+        speaker_map = {"ta": "anushka", "kn": "anushka", "en": "anushka"}
+        speaker = speaker_map.get(lang, "anushka")
         audio_out = await sarvam.text_to_speech(reply_text, language_code, speaker)
 
         return transcript, audio_out

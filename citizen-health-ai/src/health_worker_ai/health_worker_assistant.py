@@ -310,11 +310,11 @@ class HealthWorkerAssistant:
             collected_text = ""
             tool_calls_map: dict[int, dict] = {}
 
-            stream = await self.client.chat.completions.create(
+            stream = await self.client.chat.completions.create(  # type: ignore[call-overload]
                 model=SARVAM_LLM_MODEL,
                 max_tokens=1200,
-                messages=[{"role": "system", "content": system}] + loop_messages,
-                tools=HEALTH_WORKER_TOOLS,
+                messages=[{"role": "system", "content": system}] + loop_messages,  # type: ignore[arg-type]
+                tools=HEALTH_WORKER_TOOLS,  # type: ignore[arg-type]
                 stream=True,
             )
 
@@ -387,8 +387,8 @@ class HealthWorkerAssistant:
         conversation_history.append({"role": "user", "content": transcript})
         reply = await self.chat(conversation_history, language=lang, worker_role=worker_role)
 
-        speaker_map = {"ta-IN": "meera", "kn-IN": "amol"}
-        speaker = speaker_map.get(language_code, "meera")
+        speaker_map = {"ta-IN": "abhilash", "kn-IN": "abhilash", "en-IN": "abhilash"}
+        speaker = speaker_map.get(language_code, "abhilash")
         audio_out = await sarvam.text_to_speech(reply, language_code, speaker)
 
         return transcript, audio_out

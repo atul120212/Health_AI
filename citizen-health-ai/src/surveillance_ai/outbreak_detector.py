@@ -228,10 +228,10 @@ Write:
 Format your response as JSON with keys "narrative" (string) and "actions" (list of strings).
 """
 
-        response = await self.client.chat.completions.create(
+        response = await self.client.chat.completions.create(  # type: ignore[call-overload]
             model=SARVAM_LLM_MODEL,
             max_tokens=800,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": prompt}],  # type: ignore[arg-type]
         )
 
         raw = (response.choices[0].message.content or "").strip() if response.choices else ""

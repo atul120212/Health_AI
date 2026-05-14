@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aarogya Sakhi — IVR Health Assistant</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0d47a1 0%, #1565c0 40%, #1976d2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    /* ── Phone shell ── */
+    .phone {
+      background: #fafafa;
+      border-radius: 40px;
+      width: 100%;
+      max-width: 400px;
+      min-height: 750px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.5);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #1a237e, #283593);
+      color: #fff;
+      padding: 20px 20px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header .logo { font-size: 28px; }
+    .header-text h1 { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
+    .header-text p  { font-size: 11px; opacity: .75; margin-top: 2px; }
+    .status-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: #69f0ae; margin-left: auto;
+      box-shadow: 0 0 8px #69f0ae;
+      flex-shrink: 0;
+    }
+    .status-dot.inactive { background: #78909c; box-shadow: none; }
+    .status-dot.recording { background: #ff5252; box-shadow: 0 0 8px #ff5252; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
+
+    /* ── Config bar ── */
+    .config-bar {
+      background: #e8eaf6;
+      padding: 10px 16px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .config-bar label { font-size: 11px; font-weight: 600; color: #3949ab; }
+    .config-bar select, .config-bar button.start-btn {
+      font-size: 12px; border-radius: 8px; border: 1px solid #9fa8da;
+      padding: 5px 10px; background: #fff; color: #1a237e; cursor: pointer;
+      outline: none;
+    }
+    .config-bar button.start-btn {
+      background: #3f51b5; color: #fff; border-color: #3f51b5;
+      font-weight: 600; margin-left: auto;
+    }
+    .config-bar button.start-btn:hover { background: #303f9f; }
+    .config-bar button.start-btn:disabled { opacity: .5; cursor: default; }
+
+    /* ── Conversation ── */
+    .conversation {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .bubble {
+      max-width: 82%;
+      padding: 10px 14px;
+      border-radius: 18px;
+      font-size: 13px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .bubble.user {
+      align-self: flex-end;
+      background: #1565c0;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .bubble.ai {
+      align-self: flex-start;
+      background: #e8f5e9;
+      color: #1b5e20;
+      border-bottom-left-radius: 4px;
+      border: 1px solid #c8e6c9;
+    }
+    .bubble.system {
+      align-self: center;
+      background: #fff3e0;
+      color: #e65100;
+      border-radius: 10px;
+      font-size: 11px;
+      padding: 6px 12px;
+      border: 1px solid #ffe0b2;
+    }
+    .bubble .label {
+      font-size: 10px; font-weight: 700; opacity: .6;
+      margin-bottom: 3px; text-transform: uppercase; letter-spacing: .5px;
+    }
+
+    /* ── Status bar ── */
+    .status-bar {
+      background: #f5f5f5;
+      border-top: 1px solid #e0e0e0;
+      padding: 8px 16px;
+      font-size: 11px;
+      color: #607d8b;
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-bar .spinner {
+      width: 12px; height: 12px; border: 2px solid #b0bec5;
+      border-top-color: #1565c0; border-radius: 50%;
+      animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Controls ── */
+    .controls {
+      background: #fff;
+      padding: 20px 16px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .mic-btn {
+      width: 72px; height: 72px; border-radius: 50%;
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px;
+      background: linear-gradient(135deg, #1565c0, #1976d2);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(21,101,192,.4);
+      transition: transform .12s, box-shadow .12s;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .mic-btn:active, .mic-btn.recording {
+      background: linear-gradient(135deg, #b71c1c, #c62828);
+      box-shadow: 0 4px 20px rgba(183,28,28,.5);
+      transform: scale(1.07);
+    }
+    .mic-btn:disabled {
+      background: #cfd8dc; box-shadow: none; cursor: default;
+    }
+
+    .mic-hint { font-size: 11px; color: #90a4ae; text-align: center; }
+
+    .end-btn {
+      font-size: 12px; padding: 7px 20px; border-radius: 20px;
+      border: 1px solid #ef9a9a; background: #fff; color: #c62828;
+      cursor: pointer; transition: background .1s;
+    }
+    .end-btn:hover { background: #ffebee; }
+    .end-btn:disabled { opacity: .4; cursor: default; }
+
+    /* ── Placeholder ── */
+    .placeholder {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 10px; opacity: .4; padding: 30px;
+      text-align: center; color: #546e7a;
+    }
+    .placeholder .icon { font-size: 48px; }
+    .placeholder p { font-size: 13px; }
+
+    /* ── Scrollbar ── */
+    .conversation::-webkit-scrollbar { width: 4px; }
+    .conversation::-webkit-scrollbar-thumb { background: #b0bec5; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">🏥</div>
+    <div class="header-text">
+      <h1>Aarogya Sakhi</h1>
+      <p>Sarvam Saarika STT · Bulbul TTS · NHIM RAG</p>
+    </div>
+    <div class="status-dot inactive" id="statusDot"></div>
+  </div>
+
+  <!-- Config -->
+  <div class="config-bar">
+    <label>Language</label>
+    <select id="langSelect">
+      <option value="ta-IN">தமிழ் (Tamil)</option>
+      <option value="kn-IN">ಕನ್ನಡ (Kannada)</option>
+      <option value="en-IN" selected>English</option>
+    </select>
+
+    <label>Module</label>
+    <select id="moduleSelect">
+      <option value="citizen" selected>Citizen</option>
+      <option value="worker">Health Worker</option>
+    </select>
+
+    <button class="start-btn" id="startBtn" onclick="startSession()">Start IVR</button>
+  </div>
+
+  <!-- Conversation -->
+  <div class="conversation" id="conversation">
+    <div class="placeholder" id="placeholder">
+      <div class="icon">🎙️</div>
+      <p>Select language &amp; module, then tap <strong>Start IVR</strong> to begin your voice session.</p>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar" id="statusBar">
+    <span id="statusText">Ready — tap Start IVR</span>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="mic-btn" id="micBtn" disabled title="Hold to speak" onmousedown="startRecording()" onmouseup="stopRecording()" ontouchstart="startRecording(event)" ontouchend="stopRecording(event)">🎤</button>
+    <div class="mic-hint" id="micHint">Hold the button and speak</div>
+    <button class="end-btn" id="endBtn" disabled onclick="endSession()">End Session</button>
+  </div>
+
+</div>
+
+<script>
+  // ── State ────────────────────────────────────────────────────────────────
+  let sessionId      = null;
+  let mediaRecorder  = null;
+  let audioChunks    = [];
+  let isRecording    = false;
+  let isBusy         = false;   // LLM request in-flight
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────
+  const conv      = document.getElementById('conversation');
+  const placeholder = document.getElementById('placeholder');
+  const statusDot = document.getElementById('statusDot');
+  const statusTxt = document.getElementById('statusText');
+  const micBtn    = document.getElementById('micBtn');
+  const endBtn    = document.getElementById('endBtn');
+  const startBtn  = document.getElementById('startBtn');
+  const langSel   = document.getElementById('langSelect');
+  const modSel    = document.getElementById('moduleSelect');
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function setStatus(text, type='idle') {
+    // type: idle | recording | busy
+    const bar = document.getElementById('statusBar');
+    bar.innerHTML = '';
+    if (type === 'busy') {
+      const spin = document.createElement('div');
+      spin.className = 'spinner';
+      bar.appendChild(spin);
+    }
+    const span = document.createElement('span');
+    span.id = 'statusText';
+    span.textContent = text;
+    bar.appendChild(span);
+
+    statusDot.className = 'status-dot' +
+      (type === 'recording' ? ' recording' : type === 'idle' && sessionId ? '' : ' inactive');
+  }
+
+  function addBubble(role, labelText, bodyText) {
+    placeholder.style.display = 'none';
+    const wrap = document.createElement('div');
+    wrap.className = 'bubble ' + role;
+    if (labelText) {
+      const lbl = document.createElement('div');
+      lbl.className = 'label';
+      lbl.textContent = labelText;
+      wrap.appendChild(lbl);
+    }
+    const body = document.createElement('div');
+    body.textContent = bodyText;
+    wrap.appendChild(body);
+    conv.appendChild(wrap);
+    conv.scrollTop = conv.scrollHeight;
+    return wrap;
+  }
+
+  function playBase64Wav(b64) {
+    if (!b64) return;
+    const audio = new Audio('data:audio/wav;base64,' + b64);
+    audio.play().catch(() => {});
+    return new Promise(res => { audio.onended = res; audio.onerror = res; });
+  }
+
+  // ── Session lifecycle ─────────────────────────────────────────────────────
+  async function startSession() {
+    if (sessionId) return;
+    startBtn.disabled = true;
+    setStatus('Starting session…', 'busy');
+
+    const form = new FormData();
+    form.append('language_code', langSel.value);
+    form.append('module', modSel.value);
+    form.append('worker_role', 'asha');
+
+    try {
+      const res = await fetch('/ivr/start', { method: 'POST', body: form });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      sessionId = data.session_id;
+
+      addBubble('ai', '🏥 Aarogya Sakhi', data.greeting_text);
+      micBtn.disabled = false;
+      endBtn.disabled = false;
+      langSel.disabled = true;
+      modSel.disabled  = true;
+      setStatus('Session active — ' + langSel.options[langSel.selectedIndex].text, 'idle');
+
+      if (data.audio_b64) {
+        setStatus('Playing greeting…', 'busy');
+        await playBase64Wav(data.audio_b64);
+        setStatus('Hold mic button to speak', 'idle');
+      }
+    } catch(e) {
+      addBubble('system', null, '⚠️ Failed to start session: ' + e.message);
+      startBtn.disabled = false;
+      setStatus('Error — try again', 'idle');
+    }
+  }
+
+  async function endSession() {
+    if (!sessionId) return;
+    try {
+      await fetch('/ivr/end/' + sessionId, { method: 'POST' });
+    } catch(_) {}
+    addBubble('system', null, '📞 Session ended.');
+    sessionId = null;
+    micBtn.disabled  = true;
+    endBtn.disabled  = true;
+    startBtn.disabled = false;
+    langSel.disabled  = false;
+    modSel.disabled   = false;
+    setStatus('Session ended — tap Start IVR for a new session', 'idle');
+    statusDot.className = 'status-dot inactive';
+  }
+
+  // ── Recording ─────────────────────────────────────────────────────────────
+  async function startRecording(e) {
+    if (e) e.preventDefault();
+    if (!sessionId || isRecording || isBusy) return;
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch(err) {
+      addBubble('system', null, '⚠️ Microphone access denied: ' + err.message);
+      return;
+    }
+
+    audioChunks = [];
+
+    // Prefer audio/webm; fallback to whatever the browser supports
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+
+    mediaRecorder = mimeType
+      ? new MediaRecorder(stream, { mimeType })
+      : new MediaRecorder(stream);
+
+    mediaRecorder.ondataavailable = e => { if (e.data.size) audioChunks.push(e.data); };
+    mediaRecorder.start(100);
+    isRecording = true;
+
+    micBtn.classList.add('recording');
+    micBtn.textContent = '⏹️';
+    document.getElementById('micHint').textContent = 'Recording — release to send';
+    setStatus('🔴 Recording…', 'recording');
+  }
+
+  async function stopRecording(e) {
+    if (e) e.preventDefault();
+    if (!mediaRecorder || !isRecording) return;
+    isRecording = false;
+
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+    micBtn.classList.remove('recording');
+    micBtn.textContent  = '🎤';
+    micBtn.disabled = true;
+    document.getElementById('micHint').textContent = 'Processing…';
+    setStatus('Transcribing with Saarika…', 'busy');
+
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      await sendAudio(blob);
+    };
+  }
+
+  async function sendAudio(blob) {
+    isBusy = true;
+    const form = new FormData();
+    form.append('session_id', sessionId);
+    form.append('audio', blob, 'voice.webm');
+
+    try {
+      const res = await fetch('/ivr/speak', { method: 'POST', body: form });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || res.statusText);
+      }
+      const data = await res.json();
+
+      // Show user transcript bubble
+      addBubble('user', '🎙 You', data.transcript);
+
+      // Show AI reply bubble
+      addBubble('ai', '🏥 Aarogya Sakhi', data.reply);
+
+      // Play TTS (Bulbul)
+      if (data.audio_b64) {
+        setStatus('Speaking…', 'busy');
+        await playBase64Wav(data.audio_b64);
+      }
+      setStatus(`Turn ${data.turn_count} · Hold mic button to speak`, 'idle');
+    } catch(e) {
+      addBubble('system', null, '⚠️ ' + e.message);
+      setStatus('Error — try again', 'idle');
+    } finally {
+      isBusy = false;
+      if (sessionId) {
+        micBtn.disabled = false;
+        document.getElementById('micHint').textContent = 'Hold the button and speak';
+      }
+    }
+  }
+
+  // Prevent context menu on long-press (mobile)
+  document.getElementById('micBtn').addEventListener('contextmenu', e => e.preventDefault());
+</script>
+</body>
+</html>

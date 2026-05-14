@@ -33,9 +33,11 @@ class SarvamClient:
         self, audio_bytes: bytes, language_code: str = "ta-IN"
     ) -> str:
         """
-        Transcribe audio (WAV/MP3) to text using Sarvam STT.
+        Transcribe audio using Sarvam Saarika STT (saarika:v2.5).
 
-        language_code: "ta-IN" (Tamil), "kn-IN" (Kannada), "en-IN" (English)
+        Endpoint : POST /speech-to-text
+        Formats  : WAV, MP3, AAC, OGG, FLAC, WebM, MP4 — all accepted
+        language_code: "ta-IN" | "kn-IN" | "en-IN" | "unknown" (auto-detect)
         """
         if not SARVAM_API_KEY:
             logger.warning("SARVAM_API_KEY not set — returning placeholder transcript")
@@ -43,50 +45,58 @@ class SarvamClient:
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                f"{self.base_url}/speech-to-text-translate",
+                f"{self.base_url}/speech-to-text",
                 headers={"api-subscription-key": SARVAM_API_KEY},
                 files={"file": ("audio.wav", audio_bytes, "audio/wav")},
-                data={"model": "saarika:v2", "language_code": language_code},
+                data={"model": "saarika:v2.5", "language_code": language_code},
             )
-            resp.raise_for_status()
+            if not resp.is_success:
+                logger.error(
+                    "Sarvam STT %s — body: %s", resp.status_code, resp.text[:500]
+                )
+                resp.raise_for_status()
             return resp.json().get("transcript", "")
 
     async def text_to_speech(
         self,
         text: str,
         language_code: str = "ta-IN",
-        speaker: str = "meera",
-        speed: float = 1.0,
+        speaker: str = "anushka",
+        pace: float = 1.0,
     ) -> bytes:
         """
-        Convert text to speech audio (WAV) using Sarvam TTS.
+        Convert text to speech audio (WAV) using Sarvam Bulbul TTS (bulbul:v2).
 
-        Tamil speakers: meera, pavithra, maitreyi, kalpana
-        Kannada speakers: amol, arjun
+        Valid speakers — female: anushka, manisha, vidya, arya
+                         male  : abhilash, karun, hitesh
+        All speakers support all 11 Indic languages + English (en-IN).
         """
         if not SARVAM_API_KEY:
             logger.warning("SARVAM_API_KEY not set — returning empty audio")
             return b""
 
+        import base64
+        payload = {
+            "text": text,                        # string, not array
+            "target_language_code": language_code,
+            "model": "bulbul:v2",
+            "speaker": speaker,
+            "pace": pace,
+            "enable_preprocessing": True,
+        }
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{self.base_url}/text-to-speech",
                 headers=self.headers,
-                json={
-                    "inputs": [text],
-                    "target_language_code": language_code,
-                    "speaker": speaker,
-                    "model": "bulbul:v1",
-                    "speed": speed,
-                    "enable_preprocessing": True,
-                },
+                json=payload,
             )
-            resp.raise_for_status()
+            if not resp.is_success:
+                logger.error(
+                    "Sarvam TTS %s — body: %s", resp.status_code, resp.text[:500]
+                )
+                resp.raise_for_status()
             data = resp.json()
-            # Sarvam returns base64-encoded WAV
-            import base64
-            audio_b64 = data["audios"][0]
-            return base64.b64decode(audio_b64)
+            return base64.b64decode(data["audios"][0])
 
     async def translate(
         self, text: str, source_lang: str = "ta-IN", target_lang: str = "en-IN"
