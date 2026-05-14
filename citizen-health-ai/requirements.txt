@@ -10,3 +10,9 @@ scipy>=1.13.0
 aiofiles>=23.2.1
 python-multipart>=0.0.9
 jinja2>=3.1.4
+
+# LiveKit real-time transport
+livekit-api>=0.7.0
+
+# Pipecat voice AI pipeline (LiveKit transport + Silero VAD)
+pipecat-ai[livekit,silero]>=0.0.45

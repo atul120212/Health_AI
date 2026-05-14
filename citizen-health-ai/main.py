@@ -10,28 +10,40 @@ Endpoints:
   POST /surveillance/analyse  — outbreak analysis for a district+disease
   POST /surveillance/scan     — scan all priority diseases for a district
   GET  /health                — health check
+
+  Real-time (Pipecat + LiveKit):
+  POST /rt/token              — create LiveKit room + return user JWT
+  GET  /rt/rooms              — list active RT rooms (debug)
+  POST /rt/end/{room_name}    — terminate an RT room/pipeline
 """
 
 import base64
 import logging
 import sys
+import uuid
 from pathlib import Path
 
 # Ensure project root is on sys.path when running as `python main.py`
 sys.path.insert(0, str(Path(__file__).parent))
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from config.settings import HOST, PORT
+from config.settings import HOST, LIVEKIT_URL, PORT
 from src.citizen_ai import citizen_assistant
 from src.health_worker_ai import health_worker_assistant
 from src.ivr import session_manager
 from src.shared.sarvam_client import sarvam
 from src.surveillance_ai import outbreak_detector
+from src.voice_pipeline import room_manager, start_pipeline
+from src.voice_pipeline.room_manager import (
+    create_room,
+    new_room_name,
+    user_token as lk_user_token,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -455,6 +467,105 @@ async def ivr_end(session_id: str):
 async def ivr_list_sessions():
     """List all active IVR sessions (debug/monitoring)."""
     return {"sessions": session_manager.list_active()}
+
+
+# ---------------------------------------------------------------------------
+# Real-time voice  —  Pipecat pipeline + LiveKit WebRTC transport
+# ---------------------------------------------------------------------------
+# Architecture:
+#   Browser ←── WebRTC audio ──→ LiveKit room
+#                                      ↕
+#                       Pipecat pipeline (server-side bot participant):
+#                       Saarika STT → sarvam-30b LLM → Bulbul TTS
+#
+# Benefits over the classic /ivr/* endpoints:
+#   • No hold-to-record; Silero VAD detects end-of-turn automatically
+#   • Barge-in / interruption support
+#   • Sub-second latency (streaming audio over WebRTC)
+#   • Browser auto-plays the bot's voice; no base64 polling needed
+
+
+class RTSessionRequest(BaseModel):
+    module: str = Field("citizen", pattern="^(citizen|worker)$")
+    language_code: str = Field("en-IN", pattern="^(ta-IN|kn-IN|en-IN)$")
+    worker_role: str = Field("asha", pattern="^(asha|nurse)$")
+
+
+@app.post("/rt/token", tags=["RealTime"])
+async def rt_token(req: RTSessionRequest, background_tasks: BackgroundTasks):
+    """
+    Create a LiveKit room and return the user's JWT.
+
+    The caller should:
+      1. Connect to LiveKit using the returned `livekit_url` and `token`.
+      2. Enable the microphone — Silero VAD handles turn detection.
+      3. Subscribe to remote audio tracks — the bot's speech auto-plays.
+
+    A Pipecat pipeline starts in the background, joins the same room as a
+    bot participant, and drives the full STT → LLM → TTS flow.
+    """
+    if not LIVEKIT_URL:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Real-time mode is disabled: LIVEKIT_URL is not configured. "
+                "Use the classic /ivr/* endpoints or set LIVEKIT_URL in .env."
+            ),
+        )
+
+    room_name = new_room_name(req.module)
+
+    # Pre-create the room (optional — LiveKit auto-creates on first join)
+    await create_room(room_name)
+
+    # Register for monitoring
+    room_manager.register(room_name, req.module, req.language_code)
+
+    # Generate user JWT
+    participant_id = f"user-{uuid.uuid4().hex[:6]}"
+    token = lk_user_token(room_name, participant_id)
+
+    if not token:
+        raise HTTPException(status_code=500, detail="Failed to generate LiveKit token")
+
+    # Launch Pipecat pipeline in background (joins same room as bot)
+    background_tasks.add_task(
+        start_pipeline,
+        room_name=room_name,
+        module=req.module,
+        language_code=req.language_code,
+        worker_role=req.worker_role,
+    )
+
+    logger.info(
+        "RT session started: room=%s module=%s lang=%s participant=%s",
+        room_name, req.module, req.language_code, participant_id,
+    )
+
+    return {
+        "room_name": room_name,
+        "token": token,
+        "livekit_url": LIVEKIT_URL,
+        "participant_id": participant_id,
+        "module": req.module,
+        "language_code": req.language_code,
+    }
+
+
+@app.post("/rt/end/{room_name}", tags=["RealTime"])
+async def rt_end(room_name: str):
+    """Unregister an RT room (the Pipecat pipeline self-terminates when the room empties)."""
+    room_manager.unregister(room_name)
+    return {"status": "unregistered", "room_name": room_name}
+
+
+@app.get("/rt/rooms", tags=["RealTime"])
+async def rt_list_rooms():
+    """List active real-time rooms (debug/monitoring)."""
+    return {
+        "livekit_configured": bool(LIVEKIT_URL),
+        "rooms": room_manager.list_active(),
+    }
 
 
 # ---------------------------------------------------------------------------

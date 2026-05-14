@@ -9,6 +9,14 @@ SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "sk_nnbyw89f_DMaw9wIyRIhImR6FgjcrRz
 SARVAM_BASE_URL = os.getenv("SARVAM_BASE_URL", "https://api.sarvam.ai")
 SARVAM_LLM_MODEL = "sarvam-30b"
 
+# LiveKit — real-time WebRTC transport for Pipecat voice pipelines
+# Set LIVEKIT_URL to your LiveKit Cloud project URL or self-hosted server.
+# When not set, real-time (/rt/*) endpoints are disabled and the app falls back
+# to the classic HTTP IVR endpoints.
+LIVEKIT_URL        = os.getenv("LIVEKIT_URL", "")          # e.g. wss://my-project.livekit.cloud
+LIVEKIT_API_KEY    = os.getenv("LIVEKIT_API_KEY", "")      # LiveKit project API key
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "")   # LiveKit project secret
+
 # HMIS Middleware (placeholder)
 HMIS_BASE_URL = os.getenv("HMIS_BASE_URL", "http://localhost:8080/hmis")
 HMIS_API_KEY = os.getenv("HMIS_API_KEY", "")

@@ -6,10 +6,64 @@
   <title>Aarogya Sakhi — Health AI Platform</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Font Awesome 6 — local copy, CDN fallback -->
+  <link rel="stylesheet" href="/static/fa/all.min.css" />
+  <!-- LiveKit JS SDK — served locally; CDN fallback if missing -->
+  <script src="/static/js/livekit-client.umd.min.js"></script>
+  <script>
+    if (!window.LivekitClient) {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js"><\/script>');
+    }
+  </script>
   <style>
     /* ── Reset & base ─────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Light theme (default) ───────────────────────────────── */
     :root {
+      --c-bg:        #f1f5f9;
+      --c-surface:   #ffffff;
+      --c-border:    #cbd5e1;
+      --c-text:      #0f172a;
+      --c-muted:     #475569;
+
+      --citizen:     #0284c7;
+      --citizen-dk:  #0369a1;
+      --worker:      #059669;
+      --worker-dk:   #047857;
+      --surv:        #7c3aed;
+      --surv-dk:     #6d28d9;
+
+      --danger:  #dc2626;
+      --warning: #d97706;
+      --ok:      #16a34a;
+
+      --radius:    14px;
+      --radius-sm: 8px;
+      --shadow:    0 8px 32px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.06);
+
+      /* environment backgrounds — light */
+      --c-body-grad:      linear-gradient(135deg, #dbeafe 0%, #ede9fe 50%, #e0f2fe 100%);
+      --c-header-grad:    linear-gradient(135deg, rgba(2,132,199,.08), rgba(124,58,237,.05));
+      --c-tabs-bg:        rgba(226,232,240,.9);
+      --c-controls-bg:    #f8fafc;
+      --c-config-bg:      rgba(241,245,249,.95);
+      --c-item-hover-bg:  rgba(0,0,0,.05);
+      --c-input-bg:       #ffffff;
+      --c-option-bg:      #ffffff;
+      --c-flist-item-bg:  rgba(0,0,0,.035);
+      --c-ai-bubble-bg:   rgba(0,0,0,.04);
+      --c-ai-bubble-bdr:  #e2e8f0;
+      --c-rt-config-bg:   rgba(2,132,199,.06);
+      --c-rt-config-bdr:  rgba(2,132,199,.18);
+      --c-surv-form-bg:   rgba(124,58,237,.06);
+      --c-surv-form-bdr:  rgba(124,58,237,.18);
+      --c-scan-load-bg:   rgba(124,58,237,.06);
+      --c-mic-disabled:   rgba(0,0,0,.08);
+    }
+
+    /* ── Dark theme override ─────────────────────────────────── */
+    body.dark {
       --c-bg:        #0f172a;
       --c-surface:   #1e293b;
       --c-border:    #334155;
@@ -27,19 +81,36 @@
       --warning: #fbbf24;
       --ok:      #4ade80;
 
-      --radius:  14px;
-      --radius-sm: 8px;
       --shadow:  0 24px 64px rgba(0,0,0,.6);
+
+      --c-body-grad:      linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0c1a2e 100%);
+      --c-header-grad:    linear-gradient(135deg, rgba(56,189,248,.12), rgba(167,139,250,.08));
+      --c-tabs-bg:        rgba(15,23,42,.4);
+      --c-controls-bg:    rgba(15,23,42,.4);
+      --c-config-bg:      rgba(15,23,42,.3);
+      --c-item-hover-bg:  rgba(255,255,255,.06);
+      --c-input-bg:       rgba(255,255,255,.06);
+      --c-option-bg:      #1e293b;
+      --c-flist-item-bg:  rgba(255,255,255,.04);
+      --c-ai-bubble-bg:   rgba(255,255,255,.07);
+      --c-ai-bubble-bdr:  #334155;
+      --c-rt-config-bg:   rgba(56,189,248,.08);
+      --c-rt-config-bdr:  rgba(56,189,248,.2);
+      --c-surv-form-bg:   rgba(167,139,250,.08);
+      --c-surv-form-bdr:  rgba(167,139,250,.2);
+      --c-scan-load-bg:   rgba(167,139,250,.08);
+      --c-mic-disabled:   rgba(255,255,255,.08);
     }
 
     body {
       font-family: 'Inter', system-ui, sans-serif;
-      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0c1a2e 100%);
+      background: var(--c-body-grad);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
+      transition: background .3s;
     }
 
     /* ── App card ────────────────────────────────────────────── */
@@ -54,12 +125,13 @@
       flex-direction: column;
       overflow: hidden;
       min-height: 720px;
+      transition: background .3s, border-color .3s, box-shadow .3s;
     }
 
     /* ── Header ──────────────────────────────────────────────── */
     .header {
       padding: 18px 20px 14px;
-      background: linear-gradient(135deg, rgba(56,189,248,.12), rgba(167,139,250,.08));
+      background: var(--c-header-grad);
       border-bottom: 1px solid var(--c-border);
       display: flex;
       align-items: center;
@@ -70,27 +142,43 @@
       background: linear-gradient(135deg, var(--citizen), var(--surv));
       border-radius: 12px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 22px;
+      font-size: 20px; line-height: 1;
       flex-shrink: 0;
     }
+    .header-icon i { color: #fff; }
     .header-info { flex: 1; min-width: 0; }
     .header-info h1 { font-size: 16px; font-weight: 700; color: var(--c-text); }
     .header-info p  { font-size: 11px; color: var(--c-muted); margin-top: 2px; }
     .live-badge {
       font-size: 10px; font-weight: 700; letter-spacing: .5px;
       padding: 3px 8px; border-radius: 20px;
-      background: rgba(74,222,128,.15); color: var(--ok);
-      border: 1px solid rgba(74,222,128,.3);
+      background: rgba(22,163,74,.12); color: var(--ok);
+      border: 1px solid rgba(22,163,74,.3);
       flex-shrink: 0;
     }
     .live-badge::before { content: '● '; }
+
+    /* ── Theme toggle button ─────────────────────────────────── */
+    .theme-btn {
+      background: var(--c-input-bg);
+      border: 1px solid var(--c-border);
+      border-radius: 20px;
+      padding: 4px 9px;
+      font-size: 15px; line-height: 1;
+      cursor: pointer;
+      color: var(--c-muted);
+      transition: background .15s, border-color .15s, transform .1s;
+      flex-shrink: 0;
+    }
+    .theme-btn:hover { background: var(--c-item-hover-bg); border-color: var(--citizen); }
+    .theme-btn:active { transform: scale(.9); }
 
     /* ── Module tabs ─────────────────────────────────────────── */
     .tabs {
       display: flex;
       padding: 10px 12px;
       gap: 6px;
-      background: rgba(15,23,42,.4);
+      background: var(--c-tabs-bg);
       border-bottom: 1px solid var(--c-border);
     }
     .tab {
@@ -107,20 +195,41 @@
       transition: background .15s, transform .1s;
       -webkit-tap-highlight-color: transparent;
     }
-    .tab:hover { background: rgba(255,255,255,.06); }
-    .tab .tab-icon { font-size: 18px; }
-    .tab .tab-label { font-size: 10px; font-weight: 600; color: var(--c-muted); letter-spacing: .3px; }
-    .tab.active-citizen { background: rgba(56,189,248,.15); }
+    .tab:hover { background: var(--c-item-hover-bg); }
+    /* Tab icons — Font Awesome <i> inherits color */
+    .tab .tab-icon {
+      font-size: 18px; line-height: 1; display: block;
+      transition: color .15s, text-shadow .15s;
+    }
+    .tab .tab-icon i { color: var(--c-muted); }
+    .tab .tab-label { font-size: 10px; font-weight: 600; color: var(--c-muted); letter-spacing: .3px; transition: color .15s; }
+
+    .tab.active-citizen { background: rgba(2,132,199,.1); }
     .tab.active-citizen .tab-label { color: var(--citizen); }
-    .tab.active-worker  { background: rgba(52,211,153,.15); }
+    .tab.active-citizen .tab-icon i { color: var(--citizen); text-shadow: 0 0 8px rgba(2,132,199,.5); }
+
+    .tab.active-worker  { background: rgba(5,150,105,.1); }
     .tab.active-worker  .tab-label { color: var(--worker); }
-    .tab.active-surv    { background: rgba(167,139,250,.15); }
+    .tab.active-worker  .tab-icon i { color: var(--worker); text-shadow: 0 0 8px rgba(5,150,105,.5); }
+
+    .tab.active-surv    { background: rgba(124,58,237,.1); }
     .tab.active-surv    .tab-label { color: var(--surv); }
+    .tab.active-surv    .tab-icon i { color: var(--surv); text-shadow: 0 0 8px rgba(124,58,237,.5); }
+
+    /* Dark-mode tab bg tints */
+    body.dark .tab.active-citizen { background: rgba(56,189,248,.15); }
+    body.dark .tab.active-worker  { background: rgba(52,211,153,.15); }
+    body.dark .tab.active-surv    { background: rgba(167,139,250,.15); }
+
+    /* Dark-mode: boost inactive icon contrast (muted is lighter in dark) */
+    body.dark .tab.active-citizen .tab-icon i { text-shadow: 0 0 10px rgba(56,189,248,.7); }
+    body.dark .tab.active-worker  .tab-icon i { text-shadow: 0 0 10px rgba(52,211,153,.7); }
+    body.dark .tab.active-surv    .tab-icon i { text-shadow: 0 0 10px rgba(167,139,250,.7); }
 
     /* ── Config bar ──────────────────────────────────────────── */
     .config-bar {
       padding: 10px 14px;
-      background: rgba(15,23,42,.3);
+      background: var(--c-config-bg);
       border-bottom: 1px solid var(--c-border);
       display: flex;
       gap: 8px;
@@ -130,11 +239,11 @@
     .config-bar label { font-size: 10px; font-weight: 600; color: var(--c-muted); white-space: nowrap; }
     .config-bar select {
       font-size: 12px; font-family: inherit;
-      background: rgba(255,255,255,.06); color: var(--c-text);
+      background: var(--c-input-bg); color: var(--c-text);
       border: 1px solid var(--c-border); border-radius: var(--radius-sm);
       padding: 5px 8px; cursor: pointer; outline: none; flex: 1; min-width: 80px;
     }
-    .config-bar select option { background: #1e293b; }
+    .config-bar select option { background: var(--c-option-bg); color: var(--c-text); }
     .btn-start {
       font-size: 12px; font-weight: 700; padding: 6px 14px;
       border-radius: 20px; border: none; cursor: pointer; white-space: nowrap;
@@ -162,7 +271,10 @@
       flex-direction: column; gap: 10px; padding: 30px; text-align: center;
       color: var(--c-muted);
     }
-    .placeholder .p-icon { font-size: 44px; opacity: .5; }
+    .placeholder .p-icon {
+      font-size: 52px; line-height: 1; opacity: .75;
+    }
+    .placeholder .p-icon i { color: var(--citizen); }
     .placeholder p { font-size: 13px; line-height: 1.5; }
 
     .bubble {
@@ -187,20 +299,20 @@
     }
     .bubble.ai {
       align-self: flex-start;
-      background: rgba(255,255,255,.07);
+      background: var(--c-ai-bubble-bg);
       color: var(--c-text);
-      border: 1px solid var(--c-border);
+      border: 1px solid var(--c-ai-bubble-bdr);
       border-bottom-left-radius: 4px;
     }
     .bubble.ai.worker-bubble {
-      background: rgba(52,211,153,.08);
-      border-color: rgba(52,211,153,.25);
+      background: rgba(5,150,105,.07);
+      border-color: rgba(5,150,105,.22);
     }
     .bubble.sys {
       align-self: center;
-      background: rgba(251,191,36,.1);
+      background: rgba(217,119,6,.08);
       color: var(--warning);
-      border: 1px solid rgba(251,191,36,.25);
+      border: 1px solid rgba(217,119,6,.25);
       border-radius: var(--radius-sm);
       font-size: 11px;
       padding: 5px 12px;
@@ -226,7 +338,7 @@
       border-top: 1px solid var(--c-border);
       display: flex; flex-direction: column;
       align-items: center; gap: 12px;
-      background: rgba(15,23,42,.4);
+      background: var(--c-controls-bg);
     }
 
     .mic-ring {
@@ -261,7 +373,7 @@
       transform: scale(1.06);
     }
     .mic-btn:disabled {
-      background: rgba(255,255,255,.08);
+      background: var(--c-mic-disabled);
       box-shadow: none; cursor: default; color: var(--c-muted);
     }
     .mic-hint { font-size: 11px; color: var(--c-muted); }
@@ -281,8 +393,8 @@
     .surv-panel::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 4px; }
 
     .surv-form {
-      background: rgba(167,139,250,.08);
-      border: 1px solid rgba(167,139,250,.2);
+      background: var(--c-surv-form-bg);
+      border: 1px solid var(--c-surv-form-bdr);
       border-radius: var(--radius);
       padding: 14px;
       display: flex; flex-direction: column; gap: 10px;
@@ -296,13 +408,13 @@
     .form-field label { font-size: 10px; font-weight: 600; color: var(--c-muted); }
     .form-field input, .form-field select {
       font-size: 12px; font-family: inherit;
-      background: rgba(255,255,255,.06); color: var(--c-text);
+      background: var(--c-input-bg); color: var(--c-text);
       border: 1px solid var(--c-border); border-radius: var(--radius-sm);
       padding: 7px 10px; outline: none;
       transition: border-color .15s;
     }
     .form-field input:focus, .form-field select:focus { border-color: var(--surv); }
-    .form-field select option { background: #1e293b; }
+    .form-field select option { background: var(--c-option-bg); color: var(--c-text); }
     .surv-btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .btn-scan {
       font-size: 12px; font-weight: 700; padding: 7px 14px;
@@ -328,6 +440,108 @@
       text-transform: uppercase; letter-spacing: .5px;
       padding: 4px 0;
     }
+
+    /* ── Real-time panel ─────────────────────────────────────── */
+    .rt-panel {
+      padding: 14px; gap: 10px; overflow-y: auto;
+    }
+    .rt-config {
+      background: var(--c-rt-config-bg);
+      border: 1px solid var(--c-rt-config-bdr);
+      border-radius: var(--radius); padding: 14px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .rt-config h3 { font-size: 12px; font-weight: 700; color: var(--citizen); letter-spacing: .5px; text-transform: uppercase; }
+    .rt-config p  { font-size: 12px; color: var(--c-muted); line-height: 1.55; }
+
+    .feature-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+    .feature-list li {
+      font-size: 12px; color: var(--c-muted); padding: 5px 10px;
+      background: var(--c-flist-item-bg); border-radius: 7px;
+      border: 1px solid var(--c-border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .feature-list li .fi {
+      font-size: 16px; flex-shrink: 0; line-height: 1; width: 20px; text-align: center;
+    }
+    .feature-list li .fi i { color: var(--citizen); }
+
+    .rt-voice-area {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 18px; padding: 20px;
+    }
+    .rt-orb {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: linear-gradient(135deg, rgba(56,189,248,.2), rgba(167,139,250,.2));
+      border: 2px solid rgba(56,189,248,.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 38px;
+      transition: all .3s ease;
+      position: relative;
+    }
+    .rt-orb.listening {
+      background: linear-gradient(135deg, rgba(56,189,248,.35), rgba(167,139,250,.25));
+      border-color: var(--citizen);
+      box-shadow: 0 0 30px rgba(56,189,248,.4), 0 0 60px rgba(56,189,248,.15);
+      animation: orbPulse 2s ease-in-out infinite;
+    }
+    .rt-orb.speaking {
+      background: linear-gradient(135deg, rgba(74,222,128,.25), rgba(52,211,153,.2));
+      border-color: var(--ok);
+      box-shadow: 0 0 30px rgba(74,222,128,.4);
+      animation: orbSpeak .8s ease-in-out infinite;
+    }
+    .rt-orb.thinking {
+      border-color: var(--surv);
+      animation: orbSpin 1.5s linear infinite;
+    }
+    @keyframes orbPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.06);opacity:.85} }
+    @keyframes orbSpeak { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+    @keyframes orbSpin  { to{transform:rotate(360deg)} }
+
+    .rt-state-label {
+      font-size: 13px; font-weight: 600; color: var(--c-muted);
+      text-align: center; min-height: 20px;
+    }
+    .rt-transcript {
+      font-size: 12px; color: var(--c-text); text-align: center;
+      background: var(--c-flist-item-bg); border: 1px solid var(--c-border);
+      border-radius: var(--radius-sm); padding: 8px 14px;
+      max-width: 100%; word-break: break-word; line-height: 1.5;
+      min-height: 36px; width: 100%;
+    }
+    .rt-reply {
+      font-size: 12px; color: var(--c-muted); text-align: center;
+      font-style: italic; max-width: 100%; word-break: break-word;
+      line-height: 1.5; width: 100%;
+    }
+
+    .rt-controls { display: flex; gap: 10px; justify-content: center; }
+    .btn-rt-connect {
+      font-size: 13px; font-weight: 700; padding: 10px 22px;
+      border-radius: 22px; border: none; cursor: pointer;
+      background: linear-gradient(135deg, var(--citizen-dk), var(--citizen));
+      color: #fff; box-shadow: 0 4px 16px rgba(56,189,248,.35);
+      transition: opacity .15s, transform .1s;
+    }
+    .btn-rt-connect:hover  { opacity: .9; transform: translateY(-1px); }
+    .btn-rt-connect:active { transform: scale(.96); }
+    .btn-rt-connect:disabled { opacity: .4; cursor: default; transform: none; }
+    .btn-rt-disconnect {
+      font-size: 12px; padding: 8px 18px; border-radius: 20px;
+      border: 1px solid rgba(248,113,113,.4); background: transparent;
+      color: var(--danger); cursor: pointer; transition: background .1s;
+    }
+    .btn-rt-disconnect:hover { background: rgba(248,113,113,.1); }
+    .btn-rt-disconnect:disabled { opacity: .35; cursor: default; }
+
+    .rt-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 8px;
+      border-radius: 10px; letter-spacing: .4px;
+    }
+    .rt-badge.connected { background: rgba(74,222,128,.15); color: var(--ok); border: 1px solid rgba(74,222,128,.3); }
+    .rt-badge.disconnected { background: rgba(148,163,184,.1); color: var(--c-muted); border: 1px solid var(--c-border); }
+    .rt-badge.error { background: rgba(248,113,113,.15); color: var(--danger); border: 1px solid rgba(248,113,113,.3); }
 
     .alert-card {
       border-radius: var(--radius);
@@ -360,7 +574,7 @@
       display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;
     }
     .meta-chip {
-      font-size: 10px; background: rgba(255,255,255,.06);
+      font-size: 10px; background: var(--c-flist-item-bg);
       border: 1px solid var(--c-border); border-radius: 6px;
       padding: 3px 8px; color: var(--c-muted);
     }
@@ -383,13 +597,16 @@
     .no-alerts {
       text-align: center; padding: 20px; color: var(--c-muted); font-size: 13px;
     }
-    .no-alerts .na-icon { font-size: 32px; margin-bottom: 8px; }
+    .no-alerts .na-icon {
+      font-size: 38px; margin-bottom: 8px; line-height: 1;
+    }
+    .no-alerts .na-icon i { color: var(--ok); }
 
     /* Scanning loader */
     .scan-loading {
       display: flex; align-items: center; gap: 10px;
-      padding: 14px; background: rgba(167,139,250,.08);
-      border: 1px solid rgba(167,139,250,.2); border-radius: var(--radius);
+      padding: 14px; background: var(--c-scan-load-bg);
+      border: 1px solid var(--c-surv-form-bdr); border-radius: var(--radius);
       font-size: 12px; color: var(--surv);
     }
     .scan-loading .spinner { border-top-color: var(--surv); }
@@ -406,6 +623,7 @@
       <p>Sarvam Saarika STT · Bulbul TTS · NHIM RAG · Surveillance</p>
     </div>
     <div class="live-badge" id="liveBadge">LIVE</div>
+    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" title="Switch theme">🌙</button>
   </div>
 
   <!-- ── Module tabs ────────────────────────────────────────── -->
@@ -422,6 +640,10 @@
       <span class="tab-icon">📊</span>
       <span class="tab-label">Surveillance</span>
     </button>
+    <!--<button class="tab" id="tab-rt" onclick="switchModule('rt')">
+      <span class="tab-icon">⚡</span>
+      <span class="tab-label">Real-Time</span>
+    </button>-->
   </div>
 
   <!-- ── Config bar (voice modules) ────────────────────────── -->
@@ -529,6 +751,69 @@
     </div>
   </div>
 
+  <!-- ── Panel: Real-Time (Pipecat + LiveKit) ──────────────── -->
+  <div class="panel" id="panel-rt">
+    <div class="conversation surv-panel rt-panel" id="rt-content" style="gap:12px">
+
+      <!-- Config card shown before connect -->
+      <div class="rt-config" id="rtConfigCard">
+        <h3>⚡ Real-Time Voice AI</h3>
+        <p>WebRTC-powered conversation — no hold-to-record button. Speak naturally; the AI responds in real time.</p>
+        <ul class="feature-list">
+          <li><span class="fi">🎙</span> <span>Silero VAD — auto-detects when you stop speaking</span></li>
+          <li><span class="fi">🔊</span> <span>Streaming TTS — bot replies play as they're synthesised</span></li>
+          <li><span class="fi">✋</span> <span>Barge-in — interrupt the bot mid-sentence</span></li>
+          <li><span class="fi">🌐</span> <span>Sarvam Saarika STT + sarvam-30b LLM + Bulbul TTS</span></li>
+          <li><span class="fi">🔒</span> <span>LiveKit WebRTC — encrypted, low-latency audio transport</span></li>
+        </ul>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+          <div class="form-field" style="flex:1;min-width:100px">
+            <label>Module</label>
+            <select id="rtModuleSelect">
+              <option value="citizen" selected>Citizen AI</option>
+              <option value="worker">Health Worker AI</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:1;min-width:100px">
+            <label>Language</label>
+            <select id="rtLangSelect">
+              <option value="ta-IN">தமிழ் (Tamil)</option>
+              <option value="kn-IN">ಕನ್ನಡ (Kannada)</option>
+              <option value="en-IN" selected>English</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live voice area shown after connect -->
+      <div class="rt-voice-area" id="rtVoiceArea" style="display:none">
+        <div class="rt-orb" id="rtOrb">🎙</div>
+        <div class="rt-state-label" id="rtStateLabel">Connecting…</div>
+        <div class="rt-transcript" id="rtTranscript" style="display:none"></div>
+        <div class="rt-reply" id="rtReply" style="display:none"></div>
+      </div>
+
+      <!-- Hidden audio container (LiveKit auto-attach) -->
+      <div id="rtAudioContainer" style="display:none"></div>
+
+    </div>
+
+    <div class="status-bar" id="sb-rt">
+      <div class="rt-badge disconnected" id="rtBadge">DISCONNECTED</div>
+      <span id="rtStatusText">LiveKit + Pipecat real-time pipeline</span>
+    </div>
+
+    <div style="padding:14px 16px 20px;border-top:1px solid var(--c-border);background:var(--c-controls-bg);display:flex;flex-direction:column;align-items:center;gap:12px">
+      <div class="rt-controls">
+        <button class="btn-rt-connect" id="btnRtConnect" onclick="rtConnect()">⚡ Connect</button>
+        <button class="btn-rt-disconnect" id="btnRtDisconnect" disabled onclick="rtDisconnect()">Disconnect</button>
+      </div>
+      <div style="font-size:10px;color:var(--c-muted);text-align:center">
+        Powered by LiveKit WebRTC · Pipecat pipeline · Sarvam AI
+      </div>
+    </div>
+  </div>
+
 </div><!-- /app -->
 
 <script>
@@ -546,31 +831,34 @@ function switchModule(mod) {
     if (!confirm('End current session and switch module?')) return;
     endSession(true);
   }
+  if (rtRoom && mod !== 'rt') {
+    if (!confirm('Disconnect real-time session and switch module?')) return;
+    rtDisconnect();
+  }
   currentModule = mod;
 
   // Update tabs
-  ['citizen','worker','surv'].forEach(m => {
+  ['citizen','worker','surv','rt'].forEach(m => {
     const t = document.getElementById('tab-' + m);
-    t.className = 'tab' + (m === mod ? ' active-' + m : '');
+    t.className = 'tab' + (m === mod ? ' active-' + (m === 'rt' ? 'citizen' : m) : '');
   });
 
   // Show/hide panels
-  ['citizen','worker','surv'].forEach(m => {
+  ['citizen','worker','surv','rt'].forEach(m => {
     document.getElementById('panel-' + m).classList.toggle('visible', m === mod);
   });
 
-  // Config bar visibility & styling
+  // Config bar
   const voiceCfg = document.getElementById('voiceConfig');
   const startBtn = document.getElementById('startBtn');
   const roleLabel = document.getElementById('roleLabel');
   const workerRole = document.getElementById('workerRole');
 
-  if (mod === 'surv') {
+  if (mod === 'surv' || mod === 'rt') {
     voiceCfg.style.display = 'none';
   } else {
     voiceCfg.style.display = 'flex';
     startBtn.className = 'btn-start btn-' + mod;
-    // Show worker role selector only for worker module
     const isWorker = mod === 'worker';
     roleLabel.style.display  = isWorker ? '' : 'none';
     workerRole.style.display = isWorker ? '' : 'none';
@@ -937,6 +1225,187 @@ function esc(s) {
 ['mic-citizen','mic-worker'].forEach(id => {
   document.getElementById(id).addEventListener('contextmenu', e => e.preventDefault());
 });
+
+// ── Theme toggle ───────────────────────────────────────────────────────────
+function toggleTheme() {
+  const isDark = document.body.classList.toggle('dark');
+  document.getElementById('themeBtn').textContent = isDark ? '☀️' : '🌙';
+  localStorage.setItem('aarogya-theme', isDark ? 'dark' : 'light');
+}
+
+// Apply saved or system preference on load
+(function() {
+  const saved = localStorage.getItem('aarogya-theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (saved === 'dark' || (!saved && prefersDark)) {
+    document.body.classList.add('dark');
+    document.getElementById('themeBtn').textContent = '☀️';
+  }
+})();
+
+// ── Real-time (LiveKit + Pipecat) ──────────────────────────────────────────
+let rtRoom       = null;
+let rtRoomName   = null;
+const LC = window.LivekitClient;    // loaded from CDN
+
+function rtSetStatus(text, badge = 'disconnected') {
+  document.getElementById('rtStatusText').textContent = text;
+  const b = document.getElementById('rtBadge');
+  b.className = 'rt-badge ' + badge;
+  b.textContent = badge.toUpperCase();
+}
+
+function rtSetOrb(state) {
+  // state: idle | listening | thinking | speaking
+  const orb   = document.getElementById('rtOrb');
+  const label = document.getElementById('rtStateLabel');
+  orb.className = 'rt-orb' + (state !== 'idle' ? ' ' + state : '');
+  const labels = {
+    idle:      'Ready — speak to start',
+    listening: '🎙 Listening…',
+    thinking:  '🤔 Thinking…',
+    speaking:  '🔊 Speaking…',
+  };
+  label.textContent = labels[state] || state;
+}
+
+function rtShowTranscript(text) {
+  const el = document.getElementById('rtTranscript');
+  el.style.display = text ? '' : 'none';
+  el.textContent = text ? `You: "${text}"` : '';
+}
+
+function rtShowReply(text) {
+  const el = document.getElementById('rtReply');
+  el.style.display = text ? '' : 'none';
+  el.textContent = text ? text : '';
+}
+
+async function rtConnect() {
+  if (!LC) {
+    rtSetStatus('LiveKit SDK not loaded — check network', 'error');
+    return;
+  }
+
+  const module   = document.getElementById('rtModuleSelect').value;
+  const langCode = document.getElementById('rtLangSelect').value;
+
+  document.getElementById('btnRtConnect').disabled = true;
+  rtSetStatus('Requesting session token…', 'disconnected');
+
+  // 1. Get LiveKit token from server
+  let tokenData;
+  try {
+    const res = await fetch('/rt/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ module, language_code: langCode, worker_role: 'asha' }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    tokenData = await res.json();
+  } catch (e) {
+    rtSetStatus('Token error: ' + e.message, 'error');
+    document.getElementById('btnRtConnect').disabled = false;
+    return;
+  }
+
+  rtRoomName = tokenData.room_name;
+  rtSetStatus(`Connecting to room: ${rtRoomName}`, 'disconnected');
+
+  // 2. Create LiveKit Room
+  rtRoom = new LC.Room({
+    audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    adaptiveStream: true,
+    dynacast: true,
+  });
+
+  // 3. Wire up events
+  rtRoom
+    .on(LC.RoomEvent.Connected, () => {
+      rtSetStatus(`Connected · ${module} · ${langCode}`, 'connected');
+      rtSetOrb('idle');
+      document.getElementById('rtVoiceArea').style.display = 'flex';
+      document.getElementById('rtConfigCard').style.display = 'none';
+      document.getElementById('btnRtDisconnect').disabled = false;
+    })
+    .on(LC.RoomEvent.Disconnected, (reason) => {
+      rtCleanup();
+      rtSetStatus('Disconnected' + (reason ? ': ' + reason : ''), 'disconnected');
+    })
+    .on(LC.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+      if (track.kind === LC.Track.Kind.Audio) {
+        // Attach bot audio to a hidden element so browser plays it
+        const el = track.attach();
+        el.autoplay = true;
+        document.getElementById('rtAudioContainer').appendChild(el);
+        rtSetOrb('speaking');
+      }
+    })
+    .on(LC.RoomEvent.TrackUnsubscribed, (track) => {
+      track.detach().forEach(el => el.remove());
+      rtSetOrb('idle');
+    })
+    .on(LC.RoomEvent.ActiveSpeakersChanged, speakers => {
+      const locals = speakers.filter(s => s.isLocal);
+      const remote = speakers.filter(s => !s.isLocal);
+      if (locals.length > 0) {
+        rtSetOrb('listening');
+      } else if (remote.length > 0) {
+        rtSetOrb('speaking');
+      } else {
+        rtSetOrb('idle');
+      }
+    })
+    .on(LC.RoomEvent.DataReceived, (payload, participant, kind) => {
+      try {
+        const msg = JSON.parse(new TextDecoder().decode(payload));
+        if (msg.type === 'transcript')    rtShowTranscript(msg.text);
+        if (msg.type === 'reply')         rtShowReply(msg.text);
+        if (msg.type === 'state')         rtSetOrb(msg.state);
+      } catch(_) {}
+    })
+    .on(LC.RoomEvent.ConnectionStateChanged, state => {
+      if (state === LC.ConnectionState.Connecting) rtSetStatus('Reconnecting…', 'disconnected');
+      if (state === LC.ConnectionState.Connected)  rtSetStatus(`Connected · ${module}`, 'connected');
+    });
+
+  // 4. Connect
+  try {
+    await rtRoom.connect(tokenData.livekit_url, tokenData.token);
+    // Publish local microphone — VAD on server handles turn detection
+    await rtRoom.localParticipant.setMicrophoneEnabled(true);
+    rtSetOrb('idle');
+  } catch (e) {
+    rtSetStatus('Connection failed: ' + e.message, 'error');
+    rtCleanup();
+    document.getElementById('btnRtConnect').disabled = false;
+  }
+}
+
+async function rtDisconnect() {
+  if (rtRoom) {
+    await rtRoomName && fetch('/rt/end/' + rtRoomName, { method: 'POST' }).catch(() => {});
+    await rtRoom.disconnect();
+  }
+  rtCleanup();
+  rtSetStatus('Disconnected', 'disconnected');
+}
+
+function rtCleanup() {
+  rtRoom     = null;
+  rtRoomName = null;
+  document.getElementById('btnRtConnect').disabled    = false;
+  document.getElementById('btnRtDisconnect').disabled = true;
+  document.getElementById('rtVoiceArea').style.display  = 'none';
+  document.getElementById('rtConfigCard').style.display = '';
+  rtShowTranscript('');
+  rtShowReply('');
+  // Remove all attached audio elements
+  document.getElementById('rtAudioContainer').innerHTML = '';
+}
 </script>
 </body>
 </html>
