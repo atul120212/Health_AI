@@ -4,21 +4,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Anthropic
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL = "claude-opus-4-7"
-
-# Sarvam AI (Tamil/Kannada TTS/STT)
-SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "")
+# Sarvam AI
+SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "sk_nnbyw89f_DMaw9wIyRIhImR6FgjcrRzoF")
 SARVAM_BASE_URL = os.getenv("SARVAM_BASE_URL", "https://api.sarvam.ai")
+SARVAM_LLM_MODEL = "sarvam-30b"
 
 # HMIS Middleware (placeholder)
 HMIS_BASE_URL = os.getenv("HMIS_BASE_URL", "http://localhost:8080/hmis")
 HMIS_API_KEY = os.getenv("HMIS_API_KEY", "")
 
 # Server
-HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", "8000"))
+HOST = os.getenv("HOST", "127.0.0.1")
+PORT = int(os.getenv("PORT", "8001"))
 
 # Supported languages
 SUPPORTED_LANGUAGES = {
