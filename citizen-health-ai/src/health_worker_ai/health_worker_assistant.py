@@ -8,16 +8,16 @@ Capabilities:
   - Drug dosage and supply chain queries
   - Real-time decision support during home visits
 
-Uses Claude claude-opus-4-7 with tool use + streaming. Sarvam AI provides
+Uses Sarvam AI sarvam-30b with tool use + streaming. Sarvam AI provides
 Tamil/Kannada voice I/O for field workers with limited literacy.
 """
 
 import json
 import logging
 
-import anthropic
+from openai import AsyncOpenAI
 
-from config.settings import CLAUDE_MODEL, ANTHROPIC_API_KEY
+from config.settings import SARVAM_API_KEY, SARVAM_BASE_URL, SARVAM_LLM_MODEL
 from src.middleware import hmis_bridge
 from src.shared.sarvam_client import sarvam
 
@@ -93,106 +93,124 @@ Danger signs: BP >140/90, severe oedema, absent foetal movement, bleeding → im
 }
 
 # ---------------------------------------------------------------------------
-# Tool definitions
+# Tool definitions (OpenAI function-calling format)
 # ---------------------------------------------------------------------------
 
-HEALTH_WORKER_TOOLS: list[anthropic.types.ToolParam] = [
+HEALTH_WORKER_TOOLS: list[dict] = [
     {
-        "name": "get_patient_record",
-        "description": (
-            "Retrieve a patient's HMIS record for review during a home visit "
-            "or health facility encounter."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "phone": {
-                    "type": "string",
-                    "description": "Patient's mobile number",
-                }
-            },
-            "required": ["phone"],
-        },
-    },
-    {
-        "name": "update_patient_record",
-        "description": (
-            "Submit a structured patient record update to HMIS from a field "
-            "visit or PHC encounter. Include only the fields being updated."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "patient_id": {"type": "string"},
-                "update_payload": {
-                    "type": "object",
-                    "description": (
-                        "Key-value pairs of fields to update, e.g. "
-                        '{"weight_kg": 52.5, "bp_systolic": 118, "visit_notes": "..."}'
-                    ),
+        "type": "function",
+        "function": {
+            "name": "get_patient_record",
+            "description": (
+                "Retrieve a patient's HMIS record for review during a home visit "
+                "or health facility encounter."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phone": {
+                        "type": "string",
+                        "description": "Patient's mobile number",
+                    }
                 },
+                "required": ["phone"],
             },
-            "required": ["patient_id", "update_payload"],
         },
     },
     {
-        "name": "get_referral_facilities",
-        "description": (
-            "Find the nearest appropriate referral facilities for a given "
-            "condition and urgency level."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "district": {"type": "string"},
-                "condition": {
-                    "type": "string",
-                    "description": "Medical condition or speciality needed (e.g. obstetrics, SAM, trauma)",
+        "type": "function",
+        "function": {
+            "name": "update_patient_record",
+            "description": (
+                "Submit a structured patient record update to HMIS from a field "
+                "visit or PHC encounter. Include only the fields being updated."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "patient_id": {"type": "string"},
+                    "update_payload": {
+                        "type": "object",
+                        "description": (
+                            "Key-value pairs of fields to update, e.g. "
+                            '{"weight_kg": 52.5, "bp_systolic": 118, "visit_notes": "..."}'
+                        ),
+                    },
                 },
-                "urgency": {
-                    "type": "string",
-                    "enum": ["emergency", "urgent", "routine"],
-                    "description": "Urgency level for referral",
+                "required": ["patient_id", "update_payload"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_referral_facilities",
+            "description": (
+                "Find the nearest appropriate referral facilities for a given "
+                "condition and urgency level."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "district": {"type": "string"},
+                    "condition": {
+                        "type": "string",
+                        "description": "Medical condition or speciality needed (e.g. obstetrics, SAM, trauma)",
+                    },
+                    "urgency": {
+                        "type": "string",
+                        "enum": ["emergency", "urgent", "routine"],
+                        "description": "Urgency level for referral",
+                    },
                 },
+                "required": ["district", "condition"],
             },
-            "required": ["district", "condition"],
         },
     },
     {
-        "name": "lookup_protocol",
-        "description": "Look up a clinical protocol or guideline from the NHM knowledge base.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "protocol_key": {
-                    "type": "string",
-                    "enum": list(NHM_PROTOCOLS.keys()),
-                    "description": "Protocol identifier",
-                }
+        "type": "function",
+        "function": {
+            "name": "lookup_protocol",
+            "description": "Look up a clinical protocol or guideline from the NHM knowledge base.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "protocol_key": {
+                        "type": "string",
+                        "enum": list(NHM_PROTOCOLS.keys()),
+                        "description": "Protocol identifier",
+                    }
+                },
+                "required": ["protocol_key"],
             },
-            "required": ["protocol_key"],
         },
     },
     {
-        "name": "get_anc_schedule",
-        "description": "Get the ANC visit schedule and completion status for a pregnant patient.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "patient_id": {"type": "string"}
+        "type": "function",
+        "function": {
+            "name": "get_anc_schedule",
+            "description": "Get the ANC visit schedule and completion status for a pregnant patient.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "patient_id": {"type": "string"}
+                },
+                "required": ["patient_id"],
             },
-            "required": ["patient_id"],
         },
     },
     {
-        "name": "get_immunization_schedule",
-        "description": "Get immunisation schedule with due/overdue/given status for a child.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "child_id": {"type": "string"}
+        "type": "function",
+        "function": {
+            "name": "get_immunization_schedule",
+            "description": "Get immunisation schedule with due/overdue/given status for a child.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "child_id": {"type": "string"}
+                },
+                "required": ["child_id"],
             },
-            "required": ["child_id"],
         },
     },
 ]
@@ -253,7 +271,10 @@ class HealthWorkerAssistant:
     """
 
     def __init__(self):
-        self.client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        self.client = AsyncOpenAI(
+            api_key=SARVAM_API_KEY,
+            base_url=f"{SARVAM_BASE_URL}/v1",
+        )
 
     async def chat(
         self,
@@ -286,65 +307,61 @@ class HealthWorkerAssistant:
         loop_messages = list(messages)
 
         while True:
-            async with self.client.messages.stream(
-                model=CLAUDE_MODEL,
+            collected_text = ""
+            tool_calls_map: dict[int, dict] = {}
+
+            stream = await self.client.chat.completions.create(
+                model=SARVAM_LLM_MODEL,
                 max_tokens=1200,
-                thinking={"type": "adaptive"},
-                system=[
-                    {
-                        "type": "text",
-                        "text": system,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
+                messages=[{"role": "system", "content": system}] + loop_messages,
                 tools=HEALTH_WORKER_TOOLS,
-                messages=loop_messages,
-            ) as stream:
-                collected_text = ""
-                tool_use_blocks: list[dict] = []
-                current_tool: dict | None = None
-                current_input_json = ""
+                stream=True,
+            )
 
-                async for event in stream:
-                    if event.type == "content_block_start":
-                        if event.content_block.type == "tool_use":
-                            current_tool = {
-                                "id": event.content_block.id,
-                                "name": event.content_block.name,
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    collected_text += delta.content
+                if delta.tool_calls:
+                    for tc_delta in delta.tool_calls:
+                        idx = tc_delta.index
+                        if idx not in tool_calls_map:
+                            tool_calls_map[idx] = {
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""},
                             }
-                            current_input_json = ""
-                    elif event.type == "content_block_delta":
-                        delta = event.delta
-                        if delta.type == "text_delta":
-                            collected_text += delta.text
-                        elif delta.type == "input_json_delta" and current_tool:
-                            current_input_json += delta.partial_json
-                    elif event.type == "content_block_stop":
-                        if current_tool:
-                            current_tool["input"] = json.loads(current_input_json or "{}")
-                            tool_use_blocks.append(current_tool)
-                            current_tool = None
-                            current_input_json = ""
+                        if tc_delta.id:
+                            tool_calls_map[idx]["id"] = tc_delta.id
+                        if tc_delta.function:
+                            if tc_delta.function.name:
+                                tool_calls_map[idx]["function"]["name"] += tc_delta.function.name
+                            if tc_delta.function.arguments:
+                                tool_calls_map[idx]["function"]["arguments"] += tc_delta.function.arguments
 
-                final_message = await stream.get_final_message()
+            tool_calls = list(tool_calls_map.values())
 
-            if not tool_use_blocks:
+            if not tool_calls:
                 return collected_text
 
-            # Execute tools and loop
-            tool_results = []
-            for tool in tool_use_blocks:
-                result_str = await _execute_tool(tool["name"], tool["input"])
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": tool["id"],
-                        "content": result_str,
-                    }
+            # Append assistant turn with tool calls and execute them
+            loop_messages.append({
+                "role": "assistant",
+                "content": collected_text or None,
+                "tool_calls": tool_calls,
+            })
+            for tc in tool_calls:
+                result_str = await _execute_tool(
+                    tc["function"]["name"],
+                    json.loads(tc["function"]["arguments"] or "{}"),
                 )
-
-            loop_messages.append({"role": "assistant", "content": final_message.content})
-            loop_messages.append({"role": "user", "content": tool_results})
+                loop_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": result_str,
+                })
 
     # ------------------------------------------------------------------ #
     #  Voice pipeline for field workers                                   #
@@ -358,7 +375,7 @@ class HealthWorkerAssistant:
         worker_role: str = "asha",
     ) -> tuple[str, bytes]:
         """
-        Voice round-trip: STT → Claude → TTS.
+        Voice round-trip: STT → Sarvam LLM → TTS.
 
         Returns:
             (transcript, audio_response_wav)
@@ -402,15 +419,14 @@ Field note: {transcript}
 
 Return ONLY valid JSON, no explanation."""
 
-        response = await self.client.messages.create(
-            model=CLAUDE_MODEL,
+        response = await self.client.chat.completions.create(
+            model=SARVAM_LLM_MODEL,
             max_tokens=512,
             messages=[{"role": "user", "content": extraction_prompt}],
         )
-        raw = response.content[0].text.strip()
+        raw = (response.choices[0].message.content or "").strip()
 
         try:
-            # Strip markdown code fences if present
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):

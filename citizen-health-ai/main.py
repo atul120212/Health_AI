@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, Field
 
 from config.settings import HOST, PORT
@@ -95,13 +95,18 @@ class SurveillanceScanRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _to_anthropic_messages(messages: list[Message]) -> list[dict]:
+def _to_messages(messages: list[Message]) -> list[dict]:
     return [{"role": m.role, "content": m.content} for m in messages]
 
 
 # ---------------------------------------------------------------------------
-# Health check
+# Root & health check
 # ---------------------------------------------------------------------------
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/docs")
+
 
 @app.get("/health")
 async def health():
@@ -118,7 +123,7 @@ async def citizen_chat(req: ChatRequest):
     Portal widget: text-based citizen health query in Tamil/Kannada/English.
     """
     try:
-        history = _to_anthropic_messages(req.messages)
+        history = _to_messages(req.messages)
         reply = await citizen_assistant.chat(history, language=req.language)
         return ChatResponse(reply=reply)
     except Exception as exc:
@@ -169,7 +174,7 @@ async def worker_chat(req: WorkerChatRequest):
     ASHA worker or PHC nurse text query (protocol lookup, referral, etc.).
     """
     try:
-        history = _to_anthropic_messages(req.messages)
+        history = _to_messages(req.messages)
         reply = await health_worker_assistant.chat(
             history, language=req.language, worker_role=req.worker_role
         )

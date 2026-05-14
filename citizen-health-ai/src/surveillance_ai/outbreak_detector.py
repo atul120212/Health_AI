@@ -24,11 +24,12 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-import anthropic
+from openai import AsyncOpenAI
 
 from config.settings import (
-    CLAUDE_MODEL,
-    ANTHROPIC_API_KEY,
+    SARVAM_API_KEY,
+    SARVAM_BASE_URL,
+    SARVAM_LLM_MODEL,
     OUTBREAK_ALERT_THRESHOLD,
     SURVEILLANCE_LOOKBACK_DAYS,
     EARLY_WARNING_WEEKS,
@@ -86,7 +87,10 @@ class OutbreakDetector:
     """
 
     def __init__(self):
-        self.client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        self.client = AsyncOpenAI(
+            api_key=SARVAM_API_KEY,
+            base_url=f"{SARVAM_BASE_URL}/v1",
+        )
 
     async def analyse_district(
         self,
@@ -100,7 +104,7 @@ class OutbreakDetector:
         Returns a rich result dict with:
           - status: "outbreak" | "pre_alert" | "normal"
           - z_score: float (most recent week)
-          - alert_narrative: Claude-generated plain-language DHO brief
+          - alert_narrative: AI-generated plain-language DHO brief
           - weekly_data: list of weekly records with z-scores appended
           - recommended_actions: list of strings
         """
@@ -224,14 +228,13 @@ Write:
 Format your response as JSON with keys "narrative" (string) and "actions" (list of strings).
 """
 
-        response = await self.client.messages.create(
-            model=CLAUDE_MODEL,
+        response = await self.client.chat.completions.create(
+            model=SARVAM_LLM_MODEL,
             max_tokens=800,
-            thinking={"type": "adaptive"},
             messages=[{"role": "user", "content": prompt}],
         )
 
-        raw = response.content[-1].text.strip() if response.content else ""
+        raw = (response.choices[0].message.content or "").strip() if response.choices else ""
         try:
             if raw.startswith("```"):
                 raw = raw.split("```")[1]

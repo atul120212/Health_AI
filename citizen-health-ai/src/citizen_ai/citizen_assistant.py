@@ -8,7 +8,7 @@ Covers:
   - Maternal health reminders (ANC schedule, immunisation)
   - NHM programme queries (JSSK, PMSMA, Pulse Polio, etc.)
 
-Uses Claude claude-opus-4-7 with tool use + streaming, and Sarvam AI for
+Uses Sarvam AI sarvam-30b with tool use + streaming, and Sarvam AI for
 Tamil/Kannada TTS/STT so citizens can interact entirely by voice.
 """
 
@@ -16,16 +16,16 @@ import json
 import logging
 from typing import AsyncIterator
 
-import anthropic
+from openai import AsyncOpenAI
 
-from config.settings import CLAUDE_MODEL, ANTHROPIC_API_KEY
+from config.settings import SARVAM_API_KEY, SARVAM_BASE_URL, SARVAM_LLM_MODEL
 from src.middleware import hmis_bridge
 from src.shared.sarvam_client import sarvam
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# System prompt (English — Claude translates intent; Sarvam handles voice)
+# System prompt (English — model translates intent; Sarvam handles voice)
 # ---------------------------------------------------------------------------
 
 CITIZEN_SYSTEM_PROMPT = """You are "Aarogya Sakhi" (ஆரோக்ய சகி / ಆರೋಗ್ಯ ಸಖಿ), a compassionate AI health
@@ -57,114 +57,132 @@ Use the provided tools to look up real data from the health system.
 """
 
 # ---------------------------------------------------------------------------
-# Tool definitions
+# Tool definitions (OpenAI function-calling format)
 # ---------------------------------------------------------------------------
 
-CITIZEN_TOOLS: list[anthropic.types.ToolParam] = [
+CITIZEN_TOOLS: list[dict] = [
     {
-        "name": "get_patient_info",
-        "description": (
-            "Retrieve a citizen's patient record from HMIS using their mobile number. "
-            "Returns patient demographics, pregnancy status, ABHA ID, and ration card details."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "phone": {
-                    "type": "string",
-                    "description": "10-digit mobile number of the citizen",
-                }
+        "type": "function",
+        "function": {
+            "name": "get_patient_info",
+            "description": (
+                "Retrieve a citizen's patient record from HMIS using their mobile number. "
+                "Returns patient demographics, pregnancy status, ABHA ID, and ration card details."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phone": {
+                        "type": "string",
+                        "description": "10-digit mobile number of the citizen",
+                    }
+                },
+                "required": ["phone"],
             },
-            "required": ["phone"],
         },
     },
     {
-        "name": "check_insurance_eligibility",
-        "description": (
-            "Check whether the citizen is eligible for Ayushman Bharat PM-JAY "
-            "and/or CMCHIS health insurance schemes."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "patient_id": {
-                    "type": "string",
-                    "description": "HMIS patient ID returned by get_patient_info",
+        "type": "function",
+        "function": {
+            "name": "check_insurance_eligibility",
+            "description": (
+                "Check whether the citizen is eligible for Ayushman Bharat PM-JAY "
+                "and/or CMCHIS health insurance schemes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "patient_id": {
+                        "type": "string",
+                        "description": "HMIS patient ID returned by get_patient_info",
+                    },
+                    "annual_income": {
+                        "type": "number",
+                        "description": "Annual household income in INR",
+                    },
                 },
-                "annual_income": {
-                    "type": "number",
-                    "description": "Annual household income in INR",
-                },
+                "required": ["patient_id"],
             },
-            "required": ["patient_id"],
         },
     },
     {
-        "name": "get_appointment_slots",
-        "description": "Fetch available OPD appointment slots at a government hospital.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "hospital_id": {
-                    "type": "string",
-                    "description": "Hospital identifier (e.g. 'GH-CHN-001')",
+        "type": "function",
+        "function": {
+            "name": "get_appointment_slots",
+            "description": "Fetch available OPD appointment slots at a government hospital.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "hospital_id": {
+                        "type": "string",
+                        "description": "Hospital identifier (e.g. 'GH-CHN-001')",
+                    },
+                    "department": {
+                        "type": "string",
+                        "description": "Medical department (e.g. General, Obstetrics, Paediatrics)",
+                    },
+                    "date_from": {
+                        "type": "string",
+                        "description": "Start date for slot search in YYYY-MM-DD format",
+                    },
                 },
-                "department": {
-                    "type": "string",
-                    "description": "Medical department (e.g. General, Obstetrics, Paediatrics)",
-                },
-                "date_from": {
-                    "type": "string",
-                    "description": "Start date for slot search in YYYY-MM-DD format",
-                },
+                "required": ["hospital_id", "department", "date_from"],
             },
-            "required": ["hospital_id", "department", "date_from"],
         },
     },
     {
-        "name": "book_appointment",
-        "description": "Book a confirmed OPD appointment for the citizen.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "patient_id": {"type": "string"},
-                "hospital_id": {"type": "string"},
-                "department": {"type": "string"},
-                "slot_datetime": {
-                    "type": "string",
-                    "description": "ISO 8601 datetime of the chosen slot",
+        "type": "function",
+        "function": {
+            "name": "book_appointment",
+            "description": "Book a confirmed OPD appointment for the citizen.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "patient_id": {"type": "string"},
+                    "hospital_id": {"type": "string"},
+                    "department": {"type": "string"},
+                    "slot_datetime": {
+                        "type": "string",
+                        "description": "ISO 8601 datetime of the chosen slot",
+                    },
+                    "doctor_name": {"type": "string"},
                 },
-                "doctor_name": {"type": "string"},
+                "required": [
+                    "patient_id",
+                    "hospital_id",
+                    "department",
+                    "slot_datetime",
+                    "doctor_name",
+                ],
             },
-            "required": [
-                "patient_id",
-                "hospital_id",
-                "department",
-                "slot_datetime",
-                "doctor_name",
-            ],
         },
     },
     {
-        "name": "get_anc_schedule",
-        "description": "Get the Antenatal Care (ANC) visit schedule for a pregnant patient.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "patient_id": {"type": "string"}
+        "type": "function",
+        "function": {
+            "name": "get_anc_schedule",
+            "description": "Get the Antenatal Care (ANC) visit schedule for a pregnant patient.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "patient_id": {"type": "string"}
+                },
+                "required": ["patient_id"],
             },
-            "required": ["patient_id"],
         },
     },
     {
-        "name": "get_immunization_schedule",
-        "description": "Get the child immunisation schedule and due/overdue vaccines.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "child_id": {"type": "string"}
+        "type": "function",
+        "function": {
+            "name": "get_immunization_schedule",
+            "description": "Get the child immunisation schedule and due/overdue vaccines.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "child_id": {"type": "string"}
+                },
+                "required": ["child_id"],
             },
-            "required": ["child_id"],
         },
     },
 ]
@@ -174,7 +192,7 @@ CITIZEN_TOOLS: list[anthropic.types.ToolParam] = [
 # ---------------------------------------------------------------------------
 
 async def _execute_tool(tool_name: str, tool_input: dict) -> str:
-    """Dispatch a Claude tool call to the appropriate HMIS bridge method."""
+    """Dispatch a tool call to the appropriate HMIS bridge method."""
     try:
         if tool_name == "get_patient_info":
             result = await hmis_bridge.get_patient_by_phone(tool_input["phone"])
@@ -229,7 +247,7 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> str:
 
 class CitizenAssistant:
     """
-    Stateless Claude-powered assistant for citizen health queries.
+    Stateless Sarvam-powered assistant for citizen health queries.
 
     Each call to `chat()` accepts a full conversation history so callers
     can maintain session state on their side (IVR session dict / portal
@@ -237,7 +255,10 @@ class CitizenAssistant:
     """
 
     def __init__(self):
-        self.client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        self.client = AsyncOpenAI(
+            api_key=SARVAM_API_KEY,
+            base_url=f"{SARVAM_BASE_URL}/v1",
+        )
 
     async def chat(
         self,
@@ -249,7 +270,7 @@ class CitizenAssistant:
         Run a single conversational turn.
 
         Args:
-            messages: Full conversation history in Anthropic message format.
+            messages: Full conversation history in OpenAI message format.
             language: 'ta' (Tamil), 'kn' (Kannada), or 'en' (English).
             stream: Whether to use streaming (recommended for IVR latency).
 
@@ -271,132 +292,111 @@ class CitizenAssistant:
         while True:
             if stream:
                 final_text = await self._stream_turn(system, loop_messages)
-            else:
-                response = await self.client.messages.create(
-                    model=CLAUDE_MODEL,
-                    max_tokens=1024,
-                    thinking={"type": "adaptive"},
-                    system=[
-                        {
-                            "type": "text",
-                            "text": system,
-                            "cache_control": {"type": "ephemeral"},
-                        }
-                    ],
-                    tools=CITIZEN_TOOLS,
-                    messages=loop_messages,
-                )
-                final_text, tool_calls = self._parse_response(response)
-                if not tool_calls:
-                    break
-                loop_messages = await self._handle_tool_calls(
-                    loop_messages, response.content, tool_calls
-                )
-                continue
+                break
 
-            # Streaming path: re-check if there were tool calls
-            # (handled inside _stream_turn; loop_messages mutated in place)
-            break
+            response = await self.client.chat.completions.create(
+                model=SARVAM_LLM_MODEL,
+                max_tokens=1024,
+                messages=[{"role": "system", "content": system}] + loop_messages,
+                tools=CITIZEN_TOOLS,
+            )
+            choice = response.choices[0]
+            final_text = choice.message.content or ""
+            tool_calls = choice.message.tool_calls or []
+            if not tool_calls:
+                break
+            loop_messages = await self._handle_tool_calls(
+                loop_messages, choice.message, tool_calls
+            )
 
         return final_text
 
-    async def _stream_turn(
-        self, system: str, messages: list[dict]
-    ) -> str:
+    async def _stream_turn(self, system: str, messages: list[dict]) -> str:
         """Stream a single model turn, handle tool calls, return final text."""
         collected_text = ""
-        tool_use_blocks: list[dict] = []
-        current_tool: dict | None = None
-        current_input_json = ""
+        tool_calls_map: dict[int, dict] = {}
 
-        async with self.client.messages.stream(
-            model=CLAUDE_MODEL,
+        stream = await self.client.chat.completions.create(
+            model=SARVAM_LLM_MODEL,
             max_tokens=1024,
-            thinking={"type": "adaptive"},
-            system=[
-                {
-                    "type": "text",
-                    "text": system,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            messages=[{"role": "system", "content": system}] + messages,
             tools=CITIZEN_TOOLS,
-            messages=messages,
-        ) as stream:
-            async for event in stream:
-                if event.type == "content_block_start":
-                    if event.content_block.type == "tool_use":
-                        current_tool = {
-                            "id": event.content_block.id,
-                            "name": event.content_block.name,
+            stream=True,
+        )
+
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta.content:
+                collected_text += delta.content
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in tool_calls_map:
+                        tool_calls_map[idx] = {
+                            "id": "",
+                            "type": "function",
+                            "function": {"name": "", "arguments": ""},
                         }
-                        current_input_json = ""
-                elif event.type == "content_block_delta":
-                    delta = event.delta
-                    if delta.type == "text_delta":
-                        collected_text += delta.text
-                    elif delta.type == "input_json_delta" and current_tool:
-                        current_input_json += delta.partial_json
-                elif event.type == "content_block_stop":
-                    if current_tool:
-                        current_tool["input"] = json.loads(current_input_json or "{}")
-                        tool_use_blocks.append(current_tool)
-                        current_tool = None
-                        current_input_json = ""
+                    if tc_delta.id:
+                        tool_calls_map[idx]["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            tool_calls_map[idx]["function"]["name"] += tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            tool_calls_map[idx]["function"]["arguments"] += tc_delta.function.arguments
 
-            final_message = await stream.get_final_message()
-
-        if not tool_use_blocks:
+        tool_calls = list(tool_calls_map.values())
+        if not tool_calls:
             return collected_text
 
-        # Execute tools and continue the loop
-        tool_results = []
-        for tool in tool_use_blocks:
-            result_str = await _execute_tool(tool["name"], tool["input"])
-            tool_results.append(
-                {
-                    "type": "tool_result",
-                    "tool_use_id": tool["id"],
-                    "content": result_str,
-                }
-            )
+        messages.append({
+            "role": "assistant",
+            "content": collected_text or None,
+            "tool_calls": tool_calls,
+        })
 
-        # Append assistant turn + tool results, then recurse for next turn
-        messages.append({"role": "assistant", "content": final_message.content})
-        messages.append({"role": "user", "content": tool_results})
+        for tc in tool_calls:
+            result_str = await _execute_tool(
+                tc["function"]["name"],
+                json.loads(tc["function"]["arguments"] or "{}"),
+            )
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc["id"],
+                "content": result_str,
+            })
 
         return await self._stream_turn(system, messages)
 
-    def _parse_response(
-        self, response: anthropic.types.Message
-    ) -> tuple[str, list[anthropic.types.ToolUseBlock]]:
-        text = ""
-        tools = []
-        for block in response.content:
-            if hasattr(block, "text"):
-                text += block.text
-            elif block.type == "tool_use":
-                tools.append(block)
-        return text, tools
+    def _parse_response(self, response) -> tuple[str, list]:
+        choice = response.choices[0]
+        text = choice.message.content or ""
+        tool_calls = choice.message.tool_calls or []
+        return text, tool_calls
 
     async def _handle_tool_calls(
         self,
         messages: list[dict],
-        assistant_content: list,
-        tool_calls: list[anthropic.types.ToolUseBlock],
+        assistant_message,
+        tool_calls: list,
     ) -> list[dict]:
-        tool_results = []
-        for tool in tool_calls:
-            result_str = await _execute_tool(tool.name, tool.input)
-            tool_results.append(
+        messages.append({
+            "role": "assistant",
+            "content": assistant_message.content,
+            "tool_calls": [
                 {
-                    "type": "tool_result",
-                    "tool_use_id": tool.id,
-                    "content": result_str,
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
                 }
-            )
-        messages.append({"role": "assistant", "content": assistant_content})
-        messages.append({"role": "user", "content": tool_results})
+                for tc in tool_calls
+            ],
+        })
+        for tc in tool_calls:
+            result_str = await _execute_tool(tc.function.name, json.loads(tc.function.arguments))
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": result_str})
         return messages
 
     # ------------------------------------------------------------------ #
@@ -410,7 +410,7 @@ class CitizenAssistant:
         language_code: str = "ta-IN",
     ) -> tuple[str, bytes]:
         """
-        Full voice round-trip: STT → Claude → TTS.
+        Full voice round-trip: STT → Sarvam LLM → TTS.
 
         Returns:
             (transcript, response_audio_wav_bytes)
@@ -419,7 +419,7 @@ class CitizenAssistant:
         transcript = await sarvam.speech_to_text(audio_bytes, language_code)
         logger.info("STT transcript (%s): %s", language_code, transcript)
 
-        # 2. Add to history and call Claude
+        # 2. Add to history and call the LLM
         lang = language_code.split("-")[0]  # "ta-IN" → "ta"
         conversation_history.append({"role": "user", "content": transcript})
         reply_text = await self.chat(conversation_history, language=lang)
