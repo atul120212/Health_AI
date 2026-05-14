@@ -12,11 +12,30 @@ This client wraps those APIs for use in IVR and portal widget flows.
 
 import httpx
 import logging
-from typing import Any
 
 from config.settings import SARVAM_API_KEY, SARVAM_BASE_URL
 
 logger = logging.getLogger(__name__)
+
+
+def _detect_audio_mime(audio_bytes: bytes) -> tuple[str, str]:
+    """
+    Return (filename, mime_type) by inspecting magic bytes.
+    Browsers (MediaRecorder) produce WebM; direct uploads may be WAV/MP3.
+    """
+    if audio_bytes[:4] == b"RIFF":
+        return "audio.wav", "audio/wav"
+    if audio_bytes[:3] == b"ID3" or audio_bytes[:2] == b"\xff\xfb":
+        return "audio.mp3", "audio/mpeg"
+    if audio_bytes[:4] == b"OggS":
+        return "audio.ogg", "audio/ogg"
+    if audio_bytes[:4] == b"fLaC":
+        return "audio.flac", "audio/flac"
+    # WebM magic: \x1a\x45\xdf\xa3  (also covers Matroska)
+    if audio_bytes[:4] == b"\x1a\x45\xdf\xa3":
+        return "audio.webm", "audio/webm"
+    # Default: treat unknown as WebM (most common from browser MediaRecorder)
+    return "audio.webm", "audio/webm"
 
 
 class SarvamClient:
@@ -43,17 +62,18 @@ class SarvamClient:
             logger.warning("SARVAM_API_KEY not set — returning placeholder transcript")
             return "[Placeholder STT: audio transcription would appear here]"
 
+        filename, mime = _detect_audio_mime(audio_bytes)
+        logger.info("STT upload: %s (%d bytes)", mime, len(audio_bytes))
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{self.base_url}/speech-to-text",
                 headers={"api-subscription-key": SARVAM_API_KEY},
-                files={"file": ("audio.wav", audio_bytes, "audio/wav")},
+                files={"file": (filename, audio_bytes, mime)},
                 data={"model": "saarika:v2.5", "language_code": language_code},
             )
             if not resp.is_success:
-                logger.error(
-                    "Sarvam STT %s — body: %s", resp.status_code, resp.text[:500]
-                )
+                logger.error("Sarvam STT %s — %s", resp.status_code, resp.text[:500])
                 resp.raise_for_status()
             return resp.json().get("transcript", "")
 
@@ -92,7 +112,11 @@ class SarvamClient:
             )
             if not resp.is_success:
                 logger.error(
-                    "Sarvam TTS %s — body: %s", resp.status_code, resp.text[:500]
+                    "Sarvam TTS %s — body: %s — text_len=%d text_preview=%r",
+                    resp.status_code,
+                    resp.text[:500],
+                    len(text),
+                    text[:200],
                 )
                 resp.raise_for_status()
             data = resp.json()

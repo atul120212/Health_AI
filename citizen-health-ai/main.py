@@ -373,28 +373,44 @@ async def ivr_speak(
         raise HTTPException(status_code=404, detail="Session not found or expired. Call /ivr/start.")
 
     audio_bytes = await audio.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=422, detail="Empty audio received.")
 
-    # 1. Sarvam Saarika STT (saarika:v2)
-    transcript = await sarvam.speech_to_text(audio_bytes, session.language_code)
+    # ── Step 1: Sarvam Saarika STT ────────────────────────────────────────
+    try:
+        transcript = await sarvam.speech_to_text(audio_bytes, session.language_code)
+    except Exception as exc:
+        logger.exception("STT error")
+        raise HTTPException(status_code=502, detail=f"Speech-to-text failed: {exc}")
+
     if not transcript or not transcript.strip():
-        raise HTTPException(status_code=422, detail="Could not transcribe audio — try speaking more clearly.")
+        raise HTTPException(status_code=422, detail="Could not transcribe audio — speak clearly and try again.")
 
-    # 2. Append user turn to history
+    # ── Step 2: LLM (RAG context auto-injected for citizen module) ────────
     session.history.append({"role": "user", "content": transcript})
-
-    # 3. LLM call (RAG context auto-injected inside citizen_assistant.chat)
-    if session.module == "worker":
-        reply = await health_worker_assistant.chat(
-            session.history, language=session.lang, worker_role=session.worker_role
-        )
-    else:
-        reply = await citizen_assistant.chat(session.history, language=session.lang)
+    try:
+        if session.module == "worker":
+            reply = await health_worker_assistant.chat(
+                session.history, language=session.lang, worker_role=session.worker_role
+            )
+        else:
+            reply = await citizen_assistant.chat(session.history, language=session.lang)
+    except Exception as exc:
+        session.history.pop()          # remove failed user turn
+        logger.exception("LLM error")
+        raise HTTPException(status_code=502, detail=f"LLM inference failed: {exc}")
 
     session.history.append({"role": "assistant", "content": reply})
 
-    # 4. Sarvam Bulbul TTS (bulbul:v2) — citizen module
+    # ── Step 3: Sarvam Bulbul TTS (graceful degradation) ─────────────────
+    # TTS text limit is 1500 chars for bulbul:v2; truncate at sentence boundary
+    tts_text = reply if len(reply) <= 1500 else reply[:1497] + "…"
     speaker = _TTS_SPEAKERS.get(session.language_code, "anushka")
-    audio_out = await sarvam.text_to_speech(reply, session.language_code, speaker)
+    try:
+        audio_out = await sarvam.text_to_speech(tts_text, session.language_code, speaker)
+    except Exception as exc:
+        logger.warning("TTS failed (%s) — returning text-only response", exc)
+        audio_out = b""               # degrade gracefully; client shows text
 
     return {
         "session_id": session_id,
