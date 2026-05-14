@@ -425,19 +425,20 @@ class CitizenAssistant:
         Returns:
             (transcript, response_audio_wav_bytes)
         """
-        # 1. Transcribe citizen's speech
-        transcript = await sarvam.speech_to_text(audio_bytes, language_code)
-        logger.info("STT transcript (%s): %s", language_code, transcript)
+        # 1. Transcribe citizen's speech (auto-detects language if "unknown")
+        transcript, detected_lang = await sarvam.speech_to_text(audio_bytes, language_code)
+        logger.info("STT (%s→%s): %s", language_code, detected_lang, transcript)
 
-        # 2. Add to history and call the LLM
-        lang = language_code.split("-")[0]  # "ta-IN" → "ta"
+        # Use the detected language for LLM + TTS to match what was actually spoken
+        active_lang_code = detected_lang or language_code
+        lang = active_lang_code.split("-")[0]  # "ta-IN" → "ta"
         conversation_history.append({"role": "user", "content": transcript})
         reply_text = await self.chat(conversation_history, language=lang)
 
-        # 3. Convert reply to speech
+        # 3. Convert reply to speech using the detected language
         speaker_map = {"ta": "anushka", "kn": "anushka", "en": "anushka"}
         speaker = speaker_map.get(lang, "anushka")
-        audio_out = await sarvam.text_to_speech(reply_text, language_code, speaker)
+        audio_out = await sarvam.text_to_speech(reply_text, active_lang_code, speaker)
 
         return transcript, audio_out
 

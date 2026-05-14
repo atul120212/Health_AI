@@ -10,12 +10,66 @@ Sarvam AI provides:
 This client wraps those APIs for use in IVR and portal widget flows.
 """
 
+import re
+
 import httpx
 import logging
 
 from config.settings import SARVAM_API_KEY, SARVAM_BASE_URL
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_for_tts(text: str) -> str:
+    """
+    Strip markdown and non-speech characters from LLM output before TTS.
+
+    LLMs often return **bold**, *italic*, bullet lists, code spans, etc.
+    These are visually useful but sound wrong when read aloud.
+    """
+    # Remove markdown headers (# Heading)
+    text = re.sub(r'#{1,6}\s*', '', text)
+    # Remove bold/italic markers (**text**, *text*, __text__, _text_)
+    text = re.sub(r'\*{1,3}(.*?)\*{1,3}', r'\1', text)
+    text = re.sub(r'_{1,2}(.*?)_{1,2}', r'\1', text)
+    # Remove inline code (`code`)
+    text = re.sub(r'`+[^`]*`+', '', text)
+    # Remove markdown links [text](url) → text
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    # Remove bare URLs
+    text = re.sub(r'https?://\S+', '', text)
+    # Convert bullet / list markers to a natural pause (comma or period)
+    text = re.sub(r'^\s*[-*•·]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\d+[.)]\s+', '', text, flags=re.MULTILINE)
+    # Remove non-speech symbols: ~, ^, |, \, {}, <>, backtick, @, #
+    text = re.sub(r'[~^|\\{}@#<>]', '', text)
+    # Collapse repeated punctuation left after stripping (e.g. "…" artefacts)
+    text = re.sub(r'([.?!,;:\-])\1+', r'\1', text)
+    # Collapse multiple blank lines → single newline (becomes a pause)
+    text = re.sub(r'\n{2,}', '\n', text)
+    # Collapse multiple spaces
+    text = re.sub(r'[ \t]{2,}', ' ', text)
+    return text.strip()
+
+
+def _clean_transcript(text: str) -> str:
+    """
+    Normalise raw STT output into natural speech text.
+
+    Removes artefacts that ASR models sometimes emit:
+      • Repeated punctuation  ("really???" → "really?", "ok..." → "ok.")
+      • Non-speech symbols    (*, #, @, ~, `, |, ^, {, }, <, >)
+      • Leading/trailing noise (dashes, underscores, stray quotes)
+      • Redundant whitespace
+    Leaves sentence-ending punctuation intact so downstream TTS pauses correctly.
+    """
+    # Collapse runs of the same punctuation mark
+    text = re.sub(r'([.?!,;:\-])\1+', r'\1', text)
+    # Remove characters that are noise in transcripts but not speech
+    text = re.sub(r'[*#@~`|^{}<>\\]', '', text)
+    # Collapse multiple spaces / tabs
+    text = re.sub(r'[ \t]{2,}', ' ', text)
+    return text.strip()
 
 
 def _detect_audio_mime(audio_bytes: bytes) -> tuple[str, str]:
@@ -49,21 +103,30 @@ class SarvamClient:
         }
 
     async def speech_to_text(
-        self, audio_bytes: bytes, language_code: str = "ta-IN"
-    ) -> str:
+        self, audio_bytes: bytes, language_code: str = "unknown"
+    ) -> tuple[str, str]:
         """
         Transcribe audio using Sarvam Saarika STT (saarika:v2.5).
 
         Endpoint : POST /speech-to-text
         Formats  : WAV, MP3, AAC, OGG, FLAC, WebM, MP4 — all accepted
-        language_code: "ta-IN" | "kn-IN" | "en-IN" | "unknown" (auto-detect)
+
+        language_code: pass "unknown" (default) to let Sarvam auto-detect the
+            spoken language; pass a BCP-47 code ("ta-IN", "kn-IN", "en-IN") to
+            force a specific language.
+
+        Returns:
+            (transcript, detected_language_code)
+            - transcript            cleaned, naturalised text
+            - detected_language_code  BCP-47 code as reported by Sarvam
+              (falls back to the input language_code if absent in the response)
         """
         if not SARVAM_API_KEY:
             logger.warning("SARVAM_API_KEY not set — returning placeholder transcript")
-            return "[Placeholder STT: audio transcription would appear here]"
+            return "[Placeholder STT: audio transcription would appear here]", language_code
 
         filename, mime = _detect_audio_mime(audio_bytes)
-        logger.info("STT upload: %s (%d bytes)", mime, len(audio_bytes))
+        logger.info("STT upload: %s (%d bytes), lang hint=%s", mime, len(audio_bytes), language_code)
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
@@ -75,7 +138,17 @@ class SarvamClient:
             if not resp.is_success:
                 logger.error("Sarvam STT %s — %s", resp.status_code, resp.text[:500])
                 resp.raise_for_status()
-            return resp.json().get("transcript", "")
+
+            data = resp.json()
+            raw_transcript = data.get("transcript", "")
+            detected_lang = data.get("language_code") or language_code
+
+            transcript = _clean_transcript(raw_transcript)
+            logger.info(
+                "STT detected_lang=%s raw_len=%d clean_len=%d transcript=%r",
+                detected_lang, len(raw_transcript), len(transcript), transcript[:120],
+            )
+            return transcript, detected_lang
 
     async def text_to_speech(
         self,
@@ -96,8 +169,15 @@ class SarvamClient:
             return b""
 
         import base64
+        clean_text = _clean_for_tts(text)
+        if not clean_text:
+            logger.warning("TTS: text was empty after cleaning, skipping")
+            return b""
+        if len(clean_text) != len(text):
+            logger.debug("TTS cleaned %d→%d chars", len(text), len(clean_text))
+
         payload = {
-            "text": text,                        # string, not array
+            "text": clean_text,                  # cleaned, markdown-free string
             "target_language_code": language_code,
             "model": "bulbul:v2",
             "speaker": speaker,

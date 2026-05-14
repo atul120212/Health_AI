@@ -380,16 +380,17 @@ class HealthWorkerAssistant:
         Returns:
             (transcript, audio_response_wav)
         """
-        transcript = await sarvam.speech_to_text(audio_bytes, language_code)
-        logger.info("Worker STT (%s, %s): %s", worker_role, language_code, transcript)
+        transcript, detected_lang = await sarvam.speech_to_text(audio_bytes, language_code)
+        active_lang_code = detected_lang or language_code
+        logger.info("Worker STT (%s, %s→%s): %s", worker_role, language_code, active_lang_code, transcript)
 
-        lang = language_code.split("-")[0]
+        lang = active_lang_code.split("-")[0]
         conversation_history.append({"role": "user", "content": transcript})
         reply = await self.chat(conversation_history, language=lang, worker_role=worker_role)
 
         speaker_map = {"ta-IN": "abhilash", "kn-IN": "abhilash", "en-IN": "abhilash"}
-        speaker = speaker_map.get(language_code, "abhilash")
-        audio_out = await sarvam.text_to_speech(reply, language_code, speaker)
+        speaker = speaker_map.get(active_lang_code, "abhilash")
+        audio_out = await sarvam.text_to_speech(reply, active_lang_code, speaker)
 
         return transcript, audio_out
 
@@ -405,8 +406,8 @@ class HealthWorkerAssistant:
 
         Returns the HMIS update confirmation dict.
         """
-        transcript = await sarvam.speech_to_text(audio_bytes, language_code)
-        lang = language_code.split("-")[0]
+        transcript, detected_lang = await sarvam.speech_to_text(audio_bytes, language_code)
+        lang = (detected_lang or language_code).split("-")[0]
 
         extraction_prompt = f"""Extract structured patient visit data from this {lang} field note.
 Return a JSON object with any of these keys (only include what's mentioned):

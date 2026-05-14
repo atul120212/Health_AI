@@ -378,10 +378,15 @@ async def ivr_speak(
 
     # ── Step 1: Sarvam Saarika STT ────────────────────────────────────────
     try:
-        transcript = await sarvam.speech_to_text(audio_bytes, session.language_code)
+        transcript, detected_lang = await sarvam.speech_to_text(audio_bytes, session.language_code)
     except Exception as exc:
         logger.exception("STT error")
         raise HTTPException(status_code=502, detail=f"Speech-to-text failed: {exc}")
+
+    # Use detected language for LLM + TTS so the response matches what was spoken
+    if detected_lang and detected_lang != session.language_code:
+        logger.info("Language switch: %s → %s (auto-detected)", session.language_code, detected_lang)
+        session.language_code = detected_lang
 
     if not transcript or not transcript.strip():
         raise HTTPException(status_code=422, detail="Could not transcribe audio — speak clearly and try again.")
@@ -403,8 +408,9 @@ async def ivr_speak(
     session.history.append({"role": "assistant", "content": reply})
 
     # ── Step 3: Sarvam Bulbul TTS (graceful degradation) ─────────────────
-    # TTS text limit is 1500 chars for bulbul:v2; truncate at sentence boundary
-    tts_text = reply if len(reply) <= 1500 else reply[:1497] + "…"
+    # TTS text limit is 1500 chars for bulbul:v2; _clean_for_tts runs inside
+    # sarvam.text_to_speech, so truncate the raw reply here as a safety net.
+    tts_text = reply if len(reply) <= 1500 else reply[:1497] + "."
     speaker = _TTS_SPEAKERS.get(session.language_code, "anushka")
     try:
         audio_out = await sarvam.text_to_speech(tts_text, session.language_code, speaker)
